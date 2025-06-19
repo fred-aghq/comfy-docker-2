@@ -28,7 +28,7 @@ RUN git clone https://github.com/pyenv/pyenv.git /home/${USERNAME}/.pyenv && \
 ENV PYENV_ROOT="/home/${USERNAME}/.pyenv"
 ENV PATH="$PYENV_ROOT/shims:$PYENV_ROOT/bin:$PATH"
 ENV PATH="/home/${USERNAME}/.local/bin:$PATH"
-
+ENV COMFYUI_PATH=/ComfyUI
 
 RUN mkdir -p /temp-data && chown -R ${USERNAME} /temp-data
 RUN chown -R ${USERNAME} /home/${USERNAME}

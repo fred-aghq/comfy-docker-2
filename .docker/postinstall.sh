@@ -14,4 +14,4 @@ fi
 
 cd /ComfyUI
 
-python main.py $COMFY_COMMANDLINE_SWITCHES 
+python main.py --listen 0.0.0.0 $COMFY_COMMANDLINE_SWITCHES
