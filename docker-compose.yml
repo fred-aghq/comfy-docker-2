@@ -1,0 +1,23 @@
+services:
+  comfyui:
+    # image: nvidia/cuda:12.9.1-cudnn-devel-ubuntu24.04
+    build:
+      context: ./.docker
+      args:
+        USER_ID: ${UID}
+        GROUP_ID: ${GID}
+        USERNAME: ${USERNAME}
+    environment:
+      - COMFY_COMMANDLINE_SWITCHES=--help
+    user: "${UID}:${GID}"
+    working_dir: /ComfyUi
+    volumes:
+      - ./ComfyUI:/ComfyUI
+      - temp-data:/temp-data
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+volumes:
+  temp-data:
