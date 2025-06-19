@@ -8,16 +8,20 @@ services:
         GROUP_ID: ${GID}
         USERNAME: ${USERNAME}
     environment:
-      - COMFY_COMMANDLINE_SWITCHES=--help
+      - COMFY_COMMANDLINE_SWITCHES=${COMFY_COMMANDLINE_SWITCHES}
     user: "${UID}:${GID}"
     working_dir: /ComfyUI
     volumes:
       - ./ComfyUI:/ComfyUI
+      - home-data:/home/${USERNAME}
       - temp-data:/temp-data
     deploy:
       resources:
         reservations:
           devices:
             - capabilities: [gpu]
+    ports:
+      - "8188:8188"
 volumes:
   temp-data:
+  home-data:
