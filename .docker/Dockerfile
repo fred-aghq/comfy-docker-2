@@ -1,7 +1,7 @@
 FROM nvidia/cuda:12.8.1-cudnn-devel-ubuntu22.04
 ARG USER_ID=1000
 ARG GROUP_ID=1000
-ARG USERNAME=spooner
+ARG USERNAME=ubuntu
 
 
 # Create group and user
