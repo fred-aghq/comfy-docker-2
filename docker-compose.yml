@@ -1,6 +1,5 @@
 services:
   comfyui:
-    # image: nvidia/cuda:12.9.1-cudnn-devel-ubuntu24.04
     build:
       context: ./.docker
       args:
