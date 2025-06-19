@@ -1,7 +1,8 @@
 services:
   comfyui:
     build:
-      context: ./.docker
+      context: .
+      dockerfile: ./.docker/Dockerfile
       args:
         USER_ID: ${UID}
         GROUP_ID: ${GID}
@@ -9,7 +10,7 @@ services:
     environment:
       - COMFY_COMMANDLINE_SWITCHES=--help
     user: "${UID}:${GID}"
-    working_dir: /ComfyUi
+    working_dir: /ComfyUI
     volumes:
       - ./ComfyUI:/ComfyUI
       - temp-data:/temp-data

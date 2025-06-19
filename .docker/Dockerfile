@@ -27,11 +27,16 @@ RUN apt remove --purge -y build-essential git && apt autoremove -y && apt clean
 
 ENV PYENV_ROOT="/home/${USERNAME}/.pyenv"
 ENV PATH="$PYENV_ROOT/shims:$PYENV_ROOT/bin:$PATH"
+ENV PATH="home/spooner/.local/bin:$PATH"
 
-COPY ./postinstall.sh /postinstall.sh
+COPY ./.docker/postinstall.sh /postinstall.sh
 RUN chmod +x /postinstall.sh
+RUN mkdir -p /temp-data && chown -R ${USERNAME} /temp-data
+RUN chown -R ${USERNAME} /home/${USERNAME}
 
 # Switch to the new user
 USER ${USERNAME}
-
+COPY ./ComfyUI/requirements.txt /temp-data/comfy-requirements.txt
+RUN pip install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu128
+RUN pip install -r /temp-data/comfy-requirements.txt
 CMD ["/postinstall.sh"]
