@@ -38,8 +38,6 @@ FROM cuda AS comfy-install
 # Switch to the new user
 USER ${USERNAME}
 
-COPY ./ComfyUI/requirements.txt /temp-data/comfy-requirements.txt
-
 FROM comfy-install AS final-steps
 USER root
 COPY ./.docker/postinstall.sh /postinstall.sh

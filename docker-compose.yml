@@ -22,6 +22,7 @@ services:
             - capabilities: [gpu]
     ports:
       - "8188:8188"
+    restart: unless-stopped
 volumes:
   temp-data:
   home-data:
