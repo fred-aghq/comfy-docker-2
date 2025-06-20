@@ -21,3 +21,15 @@ You may not find this useful. It's also not the most space-efficient.
 1. `docker compose down -v` - this should trash everything except your ComfyUI dir. When you bring the container up again, all of its dependencies will be gone and freshly installed.
 
 > Note: try restarting and/or rebuilding the container first - the temp-data and home-data named volumes store installed pip packages so it might save you some time if that fixes it first.
+
+## Future Enhancements
+### Slim down the image
+- can we throw away the CUDA development image and switch it for the runtime image once sage is built?
+
+### Specify the CUDA/Torch (i forget) Arch Env Var
+- I want to try this in docker to see if sageattention can be compiled at build time
+
+### QoL/Misc.
+- bit more customisation over directories/custom directories
+- different "modes"
+- idk, open to suggestions - open an issue <3
