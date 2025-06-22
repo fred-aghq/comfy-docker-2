@@ -31,6 +31,6 @@ You may not find this useful. It's also not the most space-efficient.
 
 ### QoL/Misc.
 - bit more customisation over directories/custom directories:
-- ✅ configurable models/ path bind mount
+- ✅ configurable models/ path bind mount - point docker to an existing ComfyUI/models dir
 - different "modes"
 - idk, open to suggestions - open an issue <3
