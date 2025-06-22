@@ -30,6 +30,7 @@ You may not find this useful. It's also not the most space-efficient.
 - I want to try this in docker to see if sageattention can be compiled at build time
 
 ### QoL/Misc.
-- bit more customisation over directories/custom directories
+- bit more customisation over directories/custom directories:
+- ✅ configurable models/ path bind mount
 - different "modes"
 - idk, open to suggestions - open an issue <3

@@ -15,6 +15,7 @@ services:
       - ./ComfyUI:/ComfyUI
       - home-data:/home/${USERNAME}
       - temp-data:/temp-data
+      - ${MODELS_HOST_PATH:./ComfyUI/models}:/ComfyUI/models
     deploy:
       resources:
         reservations:
