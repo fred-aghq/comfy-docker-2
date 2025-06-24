@@ -8,7 +8,7 @@
         "queue_image": false
     },
     "auto_convert_comfyui_workflows": true,
-    "output_dir": "path/to/comfyui/output/folder",
+    "output_dir": "/output",
     "developer": {
         "min_comfyui_version": "v0.2.2-50-7183fd1"
     }

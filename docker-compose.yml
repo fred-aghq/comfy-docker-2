@@ -37,6 +37,7 @@ services:
       - 3000:3000
     volumes:
       - ./ComfyUI-mini/config.json:/comfyui-mini/config/default.json
+      - ./ComfyUI/output:/output
 networks:
   internal:
 volumes:
