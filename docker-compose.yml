@@ -2,7 +2,7 @@ services:
   comfyui:
     build:
       context: .
-      dockerfile: ./.docker/Dockerfile.comfyui
+      dockerfile: ./.docker/Dockerfile.main
       args:
         USER_ID: ${UID}
         GROUP_ID: ${GID}
@@ -12,17 +12,20 @@ services:
     user: "${UID}:${GID}"
     working_dir: /ComfyUI
     volumes:
-      - ./ComfyUI:/ComfyUI
+      - ${COMFY_HOST_PATH:-./ComfyUI}:/ComfyUI
       - home-data:/home/${USERNAME}
       - temp-data:/temp-data
-      - ${MODELS_HOST_PATH:-"./ComfyUI/models"}:/ComfyUI/models
+      - ${MODELS_HOST_PATH:-./ComfyUI/models}:/ComfyUI/models
     deploy:
       resources:
+        limits:
+          cpus: '8.0'
+          memory: 62G
         reservations:
           devices:
             - capabilities: [gpu]
     ports:
-      - "8188:8188"
+      - 8188:8188
     restart: unless-stopped
     networks:
       internal:

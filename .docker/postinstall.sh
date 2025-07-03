@@ -1,5 +1,6 @@
 if [ ! -f "/temp-data/.removeToReinstall" ]; then
-    pip install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu128
+  pip install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu128
+    # pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128
     cd /ComfyUI
     pip install -r requirements.txt
     pip install ninja
@@ -7,6 +8,7 @@ if [ ! -f "/temp-data/.removeToReinstall" ]; then
     git clone https://github.com/thu-ml/SageAttention.git
     cd SageAttention
     python setup.py install
+    /install-custom-nodes.sh
     touch /temp-data/.removeToReinstall
 else
     echo "Skipping installation because .removeToReinstall exists."
