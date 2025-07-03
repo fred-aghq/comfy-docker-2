@@ -1,2 +1,3 @@
 .env
-ComfyUI/
+ComfyUI*/
+docker-compose.override.yml

@@ -18,9 +18,6 @@ services:
       - ${MODELS_HOST_PATH:-./ComfyUI/models}:/ComfyUI/models
     deploy:
       resources:
-        limits:
-          cpus: '8.0'
-          memory: 62G
         reservations:
           devices:
             - capabilities: [gpu]
@@ -29,18 +26,6 @@ services:
     restart: unless-stopped
     networks:
       internal:
-  mobile:
-    build:
-      context: ./.docker
-      dockerfile: Dockerfile.comfyui-mini
-    networks:
-      internal:
-    restart: unless-stopped
-    ports:
-      - 3000:3000
-    volumes:
-      - ./ComfyUI-mini/config.json:/comfyui-mini/config/default.json
-      - ./ComfyUI/output:/output
 networks:
   internal:
 volumes:
