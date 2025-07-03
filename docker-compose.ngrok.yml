@@ -1,0 +1,14 @@
+services:
+    ngrok:
+      image: ngrok/ngrok:latest
+      command:
+        - "http"
+        - "http://comfyui:8188"
+        # - "--url"
+        # - ${NGROK_DOMAIN}"
+      environment:
+        NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
+      ports:
+        - 4040:4040
+      networks:
+        internal:

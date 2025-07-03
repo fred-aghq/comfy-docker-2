@@ -45,8 +45,8 @@ FROM comfy-install AS final-steps
 USER root
 COPY ./.docker/postinstall.sh /postinstall.sh
 COPY ./.docker/install-custom-nodes.sh /install-custom-nodes.sh
-RUN chmod 777 /postinstall.sh
-RUN chmod 777 /install-custom-nodes.sh
+RUN chmod +x /postinstall.sh
+RUN chmod +x /install-custom-nodes.sh
 
 USER ${USERNAME}
 ARG PORT=8188
