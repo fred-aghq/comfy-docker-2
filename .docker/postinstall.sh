@@ -1,5 +1,5 @@
 if [ ! -f "/temp-data/.removeToReinstall" ]; then
-  pip install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu128
+    cp -r /tmp/builtime-pip-install/* $PYENV_ROOT/versions/3.12.3/lib/python3.12/site-packages/
     # pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128
     cd /ComfyUI
     pip install -r requirements.txt

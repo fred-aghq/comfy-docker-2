@@ -47,8 +47,10 @@ COPY ./.docker/postinstall.sh /postinstall.sh
 COPY ./.docker/install-custom-nodes.sh /install-custom-nodes.sh
 RUN chmod +x /postinstall.sh && chown ${USER_ID}:${GROUP_ID} /postinstall.sh
 RUN chmod +x /install-custom-nodes.sh && chown ${USER_ID}:${GROUP_ID} /install-custom-nodes.sh
-
+RUN chown -R ${USER_ID}:${GROUP_ID} /temp-data 
 USER ${USERNAME}
+RUN pip install --target=/tmp/builtime-pip-install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu128
+
 ARG PORT=8188
 EXPOSE ${PORT}
 CMD ["/postinstall.sh"]
