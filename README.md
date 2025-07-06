@@ -23,6 +23,12 @@ You may not find this useful. It's also not the most space-efficient.
 > Note: try restarting and/or rebuilding the container first - the temp-data and home-data named volumes store installed pip packages so it might save you some time if that fixes it first.
 
 ## Future Enhancements
+### ngrok (WIP)
+I've added an ngrok container definition to suit my needs; at present, you'll need to comment out the traffic policy stuff in docker-compose.ngrok.yml, or add your own traffic policy yml file.
+
+`docker-compose -f docker-compose.yml -f docker-compose.ngrok.yml up -d`
+
+
 ### Slim down the image
 - can we throw away the CUDA development image and switch it for the runtime image once sage is built?
 
