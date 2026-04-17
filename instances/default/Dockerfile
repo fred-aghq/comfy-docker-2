@@ -64,7 +64,7 @@ FROM comfy-install AS final-steps
 ARG USER_ID=1000
 ARG GROUP_ID=1000
 ARG USERNAME=ubuntu
-ARG PYTORCH_INDEX_URL=https://download.pytorch.org/whl/cu128
+ARG PYTORCH_INDEX_URL=https://download.pytorch.org/whl/cu130
 
 USER root
 COPY ./.docker/scripts/postinstall.sh /postinstall.sh
