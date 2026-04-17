@@ -1,4 +1,4 @@
-ARG CUDA_BASE_IMAGE=nvidia/cuda:12.8.1-cudnn-devel-ubuntu22.04
+ARG CUDA_BASE_IMAGE
 FROM ${CUDA_BASE_IMAGE} AS cuda
 
 ARG USER_ID=1000
