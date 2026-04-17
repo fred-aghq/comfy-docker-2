@@ -31,17 +31,22 @@ comfy-docker-2/
 
 **Key concepts:**
 - **Global config** (`.env`): User identity (`UID`, `GID`, `USERNAME`) and the shared `MODELS_HOST_PATH`. Applies to all instances.
-- **Instance config** (`instances/<name>/instance.env`): Per-instance runtime container settings (e.g., `COMFY_COMMANDLINE_SWITCHES`). Host-side settings like ports and paths go in `.env` — see below.
+- **Instance config** (`instances/<name>/instance.env`): All per-instance settings live here — both host-side settings (paths, ports) and runtime container settings (e.g., `COMFY_COMMANDLINE_SWITCHES`). Host-side variable names are instance-prefixed (e.g., `DEFAULT_COMFY_HOST_PATH`) so they don't collide when all instance files are merged into `.env`.
 - **Instance Dockerfile** (`instances/<name>/Dockerfile`): Each instance defines its own CUDA base image, Python version, and PyTorch build. Build args at the top of the Dockerfile control these versions.
 - **Namespaced volumes**: Each instance gets its own `<name>-home-data` and `<name>-temp-data` Docker volumes, keeping pip caches, pyenv installations, and sentinel files completely isolated.
 - **Shared models**: All instances bind-mount the same `MODELS_HOST_PATH` to `/ComfyUI/models`.
 
 ## Setup
-1. `cp .env.dist .env`
-2. Set values in `.env` (UID, GID, USERNAME, MODELS_HOST_PATH, and per-instance host settings like `DEFAULT_COMFY_HOST_PATH` and `DEFAULT_HOST_PORT`)
-3. Review/edit `instances/default/instance.env` for instance-specific runtime settings (e.g., `COMFY_COMMANDLINE_SWITCHES`)
+1. Edit `.env.dist` with your global settings (UID, GID, USERNAME, and optionally MODELS_HOST_PATH)
+2. Review/edit `instances/default/instance.env` for instance-specific settings (host path, port, CLI switches)
+3. Generate `.env` by concatenating global + instance configs:
+   ```sh
+   cat .env.dist instances/*/instance.env > .env
+   ```
 4. `git clone https://github.com/comfyanonymous/ComfyUI.git`
 5. `docker compose up -d`
+
+> **Re-run step 3** any time you edit `.env.dist` or any `instance.env` file.
 
 > By default the container will install all of comfy's dependencies, torch etc., and compile SageAttention once its up and running.
 >
@@ -78,22 +83,18 @@ You can also make deeper changes (add/remove system packages, change the build f
 
 ### 3. Customise instance.env
 
-Edit `instances/my-new-instance/instance.env` for runtime container settings:
+Edit `instances/my-new-instance/instance.env` to set the host-side path, port, and any runtime settings:
 
 ```env
-# Different CLI switches
+# ── Host-side settings (used by Docker Compose for interpolation) ────
+MY_NEW_INSTANCE_COMFY_HOST_PATH=./ComfyUI-nightly
+MY_NEW_INSTANCE_HOST_PORT=8189
+
+# ── Container runtime settings ───────────────────────────────────────
 COMFY_COMMANDLINE_SWITCHES=
 ```
 
-Then add the host-side settings to your `.env` file:
-
-```env
-# ── Instance: my-new-instance ────────────────────────────────────────
-MY_NEW_INSTANCE_COMFY_HOST_PATH=./ComfyUI-nightly
-MY_NEW_INSTANCE_HOST_PORT=8189
-```
-
-> **Why `.env` and not `instance.env`?** Docker Compose only reads `.env` (and shell environment) when resolving variables in the compose file itself (volume mounts, port mappings, build args). The `env_file` directive only sets variables inside the running container.
+The host-side variable names must be instance-prefixed (matching what you reference in `docker-compose.yml`) because all instance env files are merged into a single `.env`.
 
 ### 4. Add the service to docker-compose.yml
 
@@ -116,7 +117,7 @@ services:
     user: "${UID}:${GID}"
     working_dir: /ComfyUI
     volumes:
-      - ${MY_NEW_INSTANCE_COMFY_HOST_PATH:-./ComfyUI}:/ComfyUI
+      - ${MY_NEW_INSTANCE_COMFY_HOST_PATH:-./ComfyUI-nightly}:/ComfyUI
       - my-new-instance-home-data:/home/${USERNAME}
       - my-new-instance-temp-data:/temp-data
       - ${MODELS_HOST_PATH:-./ComfyUI/models}:/ComfyUI/models
@@ -139,7 +140,7 @@ volumes:
 
 **Important things to note:**
 - The volume names **must** be unique per instance (e.g., `my-new-instance-home-data`).
-- The `HOST_PORT` variable in the `ports` mapping must use an instance-specific name (e.g., `MY_NEW_INSTANCE_HOST_PORT`) defined in `.env`.
+- Host-side variable names (`COMFY_HOST_PATH`, `HOST_PORT`) must be instance-prefixed to avoid collisions when merged into `.env`.
 - All instances share the same `MODELS_HOST_PATH` bind mount and `internal` network.
 
 ### 5. Clone ComfyUI (if using a separate app directory)
@@ -150,9 +151,12 @@ If your new instance uses a different `COMFY_HOST_PATH`:
 git clone https://github.com/comfyanonymous/ComfyUI.git ComfyUI-nightly
 ```
 
-### 6. Build and run
+### 6. Regenerate `.env` and build
 
 ```sh
+# Regenerate .env to pick up the new instance's variables
+cat .env.dist instances/*/instance.env > .env
+
 # Build and start only the new instance
 docker compose up -d comfyui-my-new-instance
 
