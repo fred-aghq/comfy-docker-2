@@ -45,7 +45,7 @@ services:
     user: "${UID}:${GID}"
     working_dir: /ComfyUI
     volumes:
-      - ${LEGACY_COMFY_HOST_PATH:-./ComfyUI}:/ComfyUI
+      - ${LEGACY_COMFY_HOST_PATH:-./ComfyUI-legacy}:/ComfyUI
       - legacy-home-data:/home/${USERNAME}
       - legacy-temp-data:/temp-data
       - ${MODELS_HOST_PATH:-./ComfyUI/models}:/ComfyUI/models
