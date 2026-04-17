@@ -29,8 +29,40 @@ services:
     restart: unless-stopped
     networks:
       internal:
+  comfyui-legacy:
+    build:
+      context: .
+      dockerfile: ./instances/legacy/Dockerfile
+      args:
+        USER_ID: ${UID}
+        GROUP_ID: ${GID}
+        USERNAME: ${USERNAME}
+        CUDA_BASE_IMAGE: nvidia/cuda:12.8.1-cudnn-devel-ubuntu22.04
+        PYTHON_VERSION: 3.12.3
+        PYTORCH_INDEX_URL: https://download.pytorch.org/whl/cu128
+    env_file:
+      - ./instances/legacy/instance.env
+    user: "${UID}:${GID}"
+    working_dir: /ComfyUI
+    volumes:
+      - ${LEGACY_COMFY_HOST_PATH:-./ComfyUI}:/ComfyUI
+      - legacy-home-data:/home/${USERNAME}
+      - legacy-temp-data:/temp-data
+      - ${MODELS_HOST_PATH:-./ComfyUI/models}:/ComfyUI/models
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    ports:
+      - ${LEGACY_HOST_PORT:-8189}:8188
+    restart: unless-stopped
+    networks:
+      internal:
 networks:
   internal:
 volumes:
   default-temp-data:
   default-home-data:
+  legacy-temp-data:
+  legacy-home-data:
