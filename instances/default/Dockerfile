@@ -7,9 +7,24 @@ ARG USERNAME=ubuntu
 ARG PYTHON_VERSION=3.12.3
 
 
-# Create group and user
-RUN groupadd --gid ${GROUP_ID} ${USERNAME} && \
-    useradd --uid ${USER_ID} --gid ${GROUP_ID} --create-home ${USERNAME} && \
+# Create or reuse group and user.
+# Ubuntu-based images ship with an 'ubuntu' user at 1000:1000, so a naive
+# groupadd/useradd fails when the host UID/GID matches. This handles all cases:
+#   - UID/GID 1000 + USERNAME=ubuntu  → no-op (already exists)
+#   - UID/GID 1000 + different name   → renames the existing user/group
+#   - Non-1000 UID/GID               → creates fresh user/group
+RUN if getent group ${GROUP_ID} > /dev/null 2>&1; then \
+        EXISTING_GROUP=$(getent group ${GROUP_ID} | cut -d: -f1); \
+        [ "$EXISTING_GROUP" != "${USERNAME}" ] && groupmod -n ${USERNAME} "$EXISTING_GROUP"; \
+    else \
+        groupadd --gid ${GROUP_ID} ${USERNAME}; \
+    fi && \
+    if getent passwd ${USER_ID} > /dev/null 2>&1; then \
+        EXISTING_USER=$(getent passwd ${USER_ID} | cut -d: -f1); \
+        [ "$EXISTING_USER" != "${USERNAME}" ] && usermod -l ${USERNAME} -d /home/${USERNAME} -m "$EXISTING_USER"; \
+    else \
+        useradd --uid ${USER_ID} --gid ${GROUP_ID} --create-home ${USERNAME}; \
+    fi && \
     usermod -aG sudo ${USERNAME}
 
 
