@@ -1,7 +1,10 @@
-FROM nvidia/cuda:12.8.1-cudnn-devel-ubuntu22.04 AS cuda
+ARG CUDA_BASE_IMAGE=nvidia/cuda:12.8.1-cudnn-devel-ubuntu22.04
+FROM ${CUDA_BASE_IMAGE} AS cuda
+
 ARG USER_ID=1000
 ARG GROUP_ID=1000
 ARG USERNAME=ubuntu
+ARG PYTHON_VERSION=3.12.3
 
 
 # Create group and user
@@ -25,8 +28,8 @@ RUN git clone https://github.com/pyenv/pyenv.git /home/${USERNAME}/.pyenv && \
     export PYENV_ROOT="/home/${USERNAME}/.pyenv" && \
     export PATH="$PYENV_ROOT/bin:$PATH" && \
     eval "$(pyenv init --path)" && \
-    pyenv install 3.12.3 && \
-    pyenv global 3.12.3
+    pyenv install ${PYTHON_VERSION} && \
+    pyenv global ${PYTHON_VERSION}
 
 ENV PYENV_ROOT="/home/${USERNAME}/.pyenv"
 ENV PATH="$PYENV_ROOT/shims:$PYENV_ROOT/bin:$PATH"
@@ -42,14 +45,20 @@ FROM cuda AS comfy-install
 USER ${USERNAME}
 
 FROM comfy-install AS final-steps
+
+ARG USER_ID=1000
+ARG GROUP_ID=1000
+ARG USERNAME=ubuntu
+ARG PYTORCH_INDEX_URL=https://download.pytorch.org/whl/cu128
+
 USER root
-COPY ./.docker/postinstall.sh /postinstall.sh
-COPY ./.docker/install-custom-nodes.sh /install-custom-nodes.sh
+COPY ./.docker/scripts/postinstall.sh /postinstall.sh
+COPY ./.docker/scripts/install-custom-nodes.sh /install-custom-nodes.sh
 RUN chmod +x /postinstall.sh && chown ${USER_ID}:${GROUP_ID} /postinstall.sh
 RUN chmod +x /install-custom-nodes.sh && chown ${USER_ID}:${GROUP_ID} /install-custom-nodes.sh
-RUN chown -R ${USER_ID}:${GROUP_ID} /temp-data 
+RUN chown -R ${USER_ID}:${GROUP_ID} /temp-data
 USER ${USERNAME}
-RUN pip install --target=/tmp/builtime-pip-install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu128
+RUN pip install --target=/tmp/builtime-pip-install torch torchvision torchaudio --extra-index-url ${PYTORCH_INDEX_URL}
 
 ARG PORT=8188
 EXPOSE ${PORT}

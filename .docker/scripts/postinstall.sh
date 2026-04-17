@@ -1,5 +1,10 @@
+#!/bin/bash
+
+# Dynamically resolve the Python site-packages directory
+SITE_PACKAGES=$(python -c "import site; print(site.getsitepackages()[0])")
+
 if [ ! -f "/temp-data/.removeToReinstall" ]; then
-    cp -r /tmp/builtime-pip-install/* $PYENV_ROOT/versions/3.12.3/lib/python3.12/site-packages/
+    cp -r /tmp/builtime-pip-install/* "$SITE_PACKAGES/"
     # pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128
     cd /ComfyUI
     pip install -r requirements.txt
