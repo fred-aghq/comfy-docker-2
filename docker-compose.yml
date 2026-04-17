@@ -7,6 +7,8 @@ services:
         USER_ID: ${UID}
         GROUP_ID: ${GID}
         USERNAME: ${USERNAME}
+        CUDA_BASE_IMAGE: nvidia/cuda:13.0.3-cudnn-devel-ubuntu24.04
+        PYTHON_VERSION: 3.14.4
     env_file:
       - ./instances/default/instance.env
     user: "${UID}:${GID}"
