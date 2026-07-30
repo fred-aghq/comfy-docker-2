@@ -2,7 +2,7 @@ services:
   comfyui-default:
     build:
       context: .
-      dockerfile: ./instances/default/Dockerfile
+      dockerfile: ./.docker/Dockerfile
       args:
         USER_ID: ${UID}
         GROUP_ID: ${GID}
@@ -32,7 +32,7 @@ services:
   comfyui-legacy:
     build:
       context: .
-      dockerfile: ./instances/legacy/Dockerfile
+      dockerfile: ./.docker/Dockerfile
       args:
         USER_ID: ${UID}
         GROUP_ID: ${GID}

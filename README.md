@@ -14,15 +14,16 @@ This repository supports running multiple, independent ComfyUI instances — eac
 ```
 comfy-docker-2/
 ├── instances/
-│   └── default/                          # One directory per ComfyUI instance
-│       ├── Dockerfile                    # Instance-specific build (CUDA, Python, PyTorch)
-│       └── instance.env                  # Instance-specific runtime config
+│   ├── default/                          # One directory per ComfyUI instance
+│   │   └── instance.env                  # Instance-specific runtime config
+│   └── legacy/
+│       └── instance.env
 ├── .docker/
+│   ├── Dockerfile                        # Shared image build (parameterised per instance)
 │   ├── scripts/
 │   │   ├── postinstall.sh                # Shared entrypoint script
 │   │   └── install-custom-nodes.sh       # Shared custom-node installer
-│   ├── Dockerfile.comfyui-mini           # Optional ComfyUI Mini UI
-│   └── ngrok/                            # Optional ngrok tunnel config
+│   └── Dockerfile.comfyui-mini           # Optional ComfyUI Mini UI
 ├── docker-compose.yml                    # Service definitions (one per instance)
 ├── docker-compose.ngrok.yml              # Optional ngrok overlay
 ├── .env.dist                             # Global config template (UID, GID, models path)
@@ -32,7 +33,7 @@ comfy-docker-2/
 **Key concepts:**
 - **Global config** (`.env`): User identity (`UID`, `GID`, `USERNAME`) and the shared `MODELS_HOST_PATH`. Applies to all instances.
 - **Instance config** (`instances/<name>/instance.env`): All per-instance settings live here — both host-side settings (paths, ports) and runtime container settings (e.g., `COMFY_COMMANDLINE_SWITCHES`). Host-side variable names are instance-prefixed (e.g., `DEFAULT_COMFY_HOST_PATH`) so they don't collide when all instance files are merged into `.env`.
-- **Instance Dockerfile** (`instances/<name>/Dockerfile`): Each instance defines its own CUDA base image, Python version, and PyTorch build. Build args at the top of the Dockerfile control these versions.
+- **Shared Dockerfile** (`.docker/Dockerfile`): All instances build from the same Dockerfile. Each instance picks its own CUDA base image, Python version, and PyTorch build via the `build.args` on its service in `docker-compose.yml`. An instance that needs a genuinely different build flow can still point its service's `build.dockerfile` at its own file.
 - **Namespaced volumes**: Each instance gets its own `<name>-home-data` and `<name>-temp-data` Docker volumes, keeping pip caches, pyenv installations, and sentinel files completely isolated.
 - **Shared models**: All instances bind-mount the same `MODELS_HOST_PATH` to `/ComfyUI/models`.
 
@@ -67,19 +68,18 @@ To add a second (or third, etc.) ComfyUI instance with its own independent envir
 cp -r instances/default instances/my-new-instance
 ```
 
-### 2. Customise the Dockerfile
+### 2. Choose the CUDA / Python / PyTorch versions
 
-Edit `instances/my-new-instance/Dockerfile`. The build args at the top control the core dependencies:
+All instances build from the shared `.docker/Dockerfile`; the versions are controlled by the `build.args` on the instance's service in `docker-compose.yml` (set in step 4):
 
-```dockerfile
-ARG CUDA_BASE_IMAGE=nvidia/cuda:12.6.0-cudnn-devel-ubuntu22.04   # Change CUDA version
-# ...
-ARG PYTHON_VERSION=3.11.9                                         # Change Python version
-# ...
-ARG PYTORCH_INDEX_URL=https://download.pytorch.org/whl/cu126      # Match CUDA version
+```yaml
+      args:
+        CUDA_BASE_IMAGE: nvidia/cuda:12.6.0-cudnn-devel-ubuntu22.04   # CUDA version
+        PYTHON_VERSION: 3.11.9                                        # Python version
+        PYTORCH_INDEX_URL: https://download.pytorch.org/whl/cu126     # Match CUDA version
 ```
 
-You can also make deeper changes (add/remove system packages, change the build flow entirely) — the Dockerfile is fully self-contained per instance.
+If an instance needs deeper changes (different system packages, a different build flow entirely), copy `.docker/Dockerfile` into the instance directory and point the service's `build.dockerfile` at it — everything else keeps working the same way.
 
 ### 3. Customise instance.env
 
@@ -107,11 +107,14 @@ services:
   comfyui-my-new-instance:
     build:
       context: .
-      dockerfile: ./instances/my-new-instance/Dockerfile
+      dockerfile: ./.docker/Dockerfile
       args:
         USER_ID: ${UID}
         GROUP_ID: ${GID}
         USERNAME: ${USERNAME}
+        CUDA_BASE_IMAGE: nvidia/cuda:12.6.0-cudnn-devel-ubuntu22.04
+        PYTHON_VERSION: 3.11.9
+        PYTORCH_INDEX_URL: https://download.pytorch.org/whl/cu126
     env_file:
       - ./instances/my-new-instance/instance.env
     user: "${UID}:${GID}"
