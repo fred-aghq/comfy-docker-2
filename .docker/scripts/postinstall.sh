@@ -42,6 +42,10 @@ if [[ "${COMFY_COMMANDLINE_SWITCHES:-}" == *--use-sage-attention* ]] \
     exit 1
 fi
 
-cd /ComfyUI
+cd /ComfyUI || exit 1
 
+# Deliberately unquoted: COMFY_COMMANDLINE_SWITCHES holds several
+# space-separated flags, and quoting it would hand ComfyUI one long argument
+# instead of separate switches.
+# shellcheck disable=SC2086
 exec python main.py --listen 0.0.0.0 ${COMFY_COMMANDLINE_SWITCHES:-}

@@ -1,5 +1,12 @@
 ARG CUDA_BASE_IMAGE
 ARG CUDA_RUNTIME_IMAGE
+ARG UV_VERSION=latest
+
+# uv, pulled in as its own stage so both build stages can copy the binaries out
+# of it. An image reference in COPY --from has to resolve when the Dockerfile is
+# parsed, which only works for an ARG declared here at global scope — a
+# stage-scoped ARG leaves the reference unexpanded and the build fails.
+FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
 
 # ─── builder ─────────────────────────────────────────────────────────────────
 # Everything that needs a compiler happens here, on the CUDA devel image: the
@@ -14,8 +21,7 @@ RUN export DEBIAN_FRONTEND=noninteractive &&\
     build-essential curl ca-certificates git && \
     rm -rf /var/lib/apt/lists/*
 
-ARG UV_VERSION=latest
-COPY --from=ghcr.io/astral-sh/uv:${UV_VERSION} /uv /uvx /usr/local/bin/
+COPY --from=uv /uv /uvx /usr/local/bin/
 
 # Python and the virtualenv live outside /home so no bind mount or named
 # volume can shadow them — the image is the environment.
@@ -105,8 +111,7 @@ RUN export DEBIAN_FRONTEND=noninteractive &&\
     rm -rf /var/lib/apt/lists/*
 
 # uv is needed at runtime too — custom-node requirements install on startup.
-ARG UV_VERSION=latest
-COPY --from=ghcr.io/astral-sh/uv:${UV_VERSION} /uv /uvx /usr/local/bin/
+COPY --from=uv /uv /uvx /usr/local/bin/
 
 ENV UV_PYTHON_INSTALL_DIR=/opt/uv/python
 ENV VIRTUAL_ENV=/opt/venv
