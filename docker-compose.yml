@@ -36,12 +36,12 @@ services:
     env_file:
       - ./instances/default/instance.env
     volumes:
-      - ${DEFAULT_COMFY_HOST_PATH:-./ComfyUI}:/ComfyUI
+      - ./ComfyUI:/ComfyUI
       - default-home-data:/home/${USERNAME}
       - default-temp-data:/temp-data
       - ${MODELS_HOST_PATH:-./ComfyUI/models}:/ComfyUI/models
     ports:
-      - ${DEFAULT_HOST_PORT:-8188}:8188
+      - "8188:8188"
   comfyui-legacy:
     <<: *comfyui-base
     profiles: ["legacy"]
@@ -56,12 +56,12 @@ services:
     env_file:
       - ./instances/legacy/instance.env
     volumes:
-      - ${LEGACY_COMFY_HOST_PATH:-./ComfyUI-legacy}:/ComfyUI
+      - ./ComfyUI-legacy:/ComfyUI
       - legacy-home-data:/home/${USERNAME}
       - legacy-temp-data:/temp-data
       - ${MODELS_HOST_PATH:-./ComfyUI/models}:/ComfyUI/models
     ports:
-      - ${LEGACY_HOST_PORT:-8189}:8188
+      - "8189:8188"
 networks:
   internal:
 volumes:

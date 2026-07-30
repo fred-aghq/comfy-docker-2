@@ -31,24 +31,22 @@ comfy-docker-2/
 ```
 
 **Key concepts:**
-- **Global config** (`.env`): User identity (`UID`, `GID`, `USERNAME`) and the shared `MODELS_HOST_PATH`. Applies to all instances.
-- **Instance config** (`instances/<name>/instance.env`): All per-instance settings live here — both host-side settings (paths, ports) and runtime container settings (e.g., `COMFY_COMMANDLINE_SWITCHES`). Host-side variable names are instance-prefixed (e.g., `DEFAULT_COMFY_HOST_PATH`) so they don't collide when all instance files are merged into `.env`.
+- **Global config** (`.env`): Settings that apply to every instance — user identity (`UID`, `GID`, `USERNAME`), the shared `MODELS_HOST_PATH`, and `COMPOSE_PROFILES`. Create it with `cp .env.dist .env`.
+- **Instance runtime config** (`instances/<name>/instance.env`): Per-instance settings passed into the running container (e.g. `COMFY_COMMANDLINE_SWITCHES`). Loaded directly by the service's `env_file`, so no prefixing and no merge step — edit and restart.
+- **Instance host-side config**: The app directory and host port are set directly on the instance's service in `docker-compose.yml`, where you can see them next to everything else about that instance.
 - **Shared Dockerfile** (`.docker/Dockerfile`): All instances build from the same Dockerfile. Each instance picks its own CUDA base image, Python version, and PyTorch build via the `build.args` on its service in `docker-compose.yml`. An instance that needs a genuinely different build flow can still point its service's `build.dockerfile` at its own file.
 - **Namespaced volumes**: Each instance gets its own `<name>-home-data` and `<name>-temp-data` Docker volumes, keeping pip caches, pyenv installations, and sentinel files completely isolated.
 - **Shared models**: All instances bind-mount the same `MODELS_HOST_PATH` to `/ComfyUI/models`.
 - **Profiles**: Each instance declares a Compose profile matching its name, so `docker compose up` starts only the instance(s) you've selected rather than everything defined in the file. See [Switching between instances](#switching-between-instances).
 
 ## Setup
-1. Edit `.env.dist` with your global settings (UID, GID, USERNAME, `COMPOSE_PROFILES`, and optionally MODELS_HOST_PATH)
-2. Review/edit `instances/default/instance.env` for instance-specific settings (host path, port, CLI switches)
-3. Generate `.env` by concatenating global + instance configs:
+1. Create your global config and edit it (UID, GID, USERNAME, `COMPOSE_PROFILES`, and optionally MODELS_HOST_PATH):
    ```sh
-   cat .env.dist instances/*/instance.env > .env
+   cp .env.dist .env
    ```
-4. `git clone https://github.com/comfyanonymous/ComfyUI.git`
-5. `docker compose up -d`
-
-> **Re-run step 3** any time you edit `.env.dist` or any `instance.env` file.
+2. Review/edit `instances/default/instance.env` for that instance's runtime settings (CLI switches)
+3. `git clone https://github.com/comfyanonymous/ComfyUI.git`
+4. `docker compose up -d`
 
 > By default the container will install all of comfy's dependencies, torch etc., and compile SageAttention once its up and running.
 >
@@ -124,18 +122,13 @@ If an instance needs deeper changes (different system packages, a different buil
 
 ### 3. Customise instance.env
 
-Edit `instances/my-new-instance/instance.env` to set the host-side path, port, and any runtime settings:
+Edit `instances/my-new-instance/instance.env` with the settings this instance's container should run with:
 
 ```env
-# ── Host-side settings (used by Docker Compose for interpolation) ────
-MY_NEW_INSTANCE_COMFY_HOST_PATH=./ComfyUI-nightly
-MY_NEW_INSTANCE_HOST_PORT=8189
-
-# ── Container runtime settings ───────────────────────────────────────
 COMFY_COMMANDLINE_SWITCHES=
 ```
 
-The host-side variable names must be instance-prefixed (matching what you reference in `docker-compose.yml`) because all instance env files are merged into a single `.env`.
+The app directory and host port aren't set here — they go on the service itself in the next step.
 
 ### 4. Add the service to docker-compose.yml
 
@@ -159,12 +152,12 @@ services:
     env_file:
       - ./instances/my-new-instance/instance.env
     volumes:
-      - ${MY_NEW_INSTANCE_COMFY_HOST_PATH:-./ComfyUI-nightly}:/ComfyUI
+      - ./ComfyUI-nightly:/ComfyUI
       - my-new-instance-home-data:/home/${USERNAME}
       - my-new-instance-temp-data:/temp-data
       - ${MODELS_HOST_PATH:-./ComfyUI/models}:/ComfyUI/models
     ports:
-      - ${MY_NEW_INSTANCE_HOST_PORT:-8190}:8188
+      - "8190:8188"
 
 volumes:
   # ... existing volumes ...
@@ -177,24 +170,21 @@ volumes:
 **Important things to note:**
 - The **profile name** is how you start this instance: `docker compose --profile my-new-instance up -d`, or add it to `COMPOSE_PROFILES` in `.env`.
 - The volume names **must** be unique per instance (e.g., `my-new-instance-home-data`).
-- The **host port** must not collide with another instance's (8188 and 8189 are taken by `default` and `legacy`).
-- Host-side variable names (`COMFY_HOST_PATH`, `HOST_PORT`) must be instance-prefixed to avoid collisions when merged into `.env`.
+- The **host port** must not collide with another instance's (8188 and 8189 are taken by `default` and `legacy`). The container side is always 8188.
+- The **app directory** must be its own checkout — two instances sharing one `/ComfyUI` bind mount would fight over `custom_nodes`.
 - All instances share the same `MODELS_HOST_PATH` bind mount and `internal` network.
 
-### 5. Clone ComfyUI (if using a separate app directory)
+### 5. Clone ComfyUI into the instance's app directory
 
-If your new instance uses a different `COMFY_HOST_PATH`:
+Match the path you used in the service's `/ComfyUI` bind mount:
 
 ```sh
 git clone https://github.com/comfyanonymous/ComfyUI.git ComfyUI-nightly
 ```
 
-### 6. Regenerate `.env` and build
+### 6. Build and start
 
 ```sh
-# Regenerate .env to pick up the new instance's variables
-cat .env.dist instances/*/instance.env > .env
-
 # Build and start only the new instance
 docker compose --profile my-new-instance up -d
 
