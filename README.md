@@ -36,7 +36,8 @@ comfy-docker-2/
 - **Instance runtime config** (`instances/<name>/instance.env`): Per-instance settings passed into the running container (e.g. `COMFY_COMMANDLINE_SWITCHES`). Loaded directly by the service's `env_file`, so no prefixing and no merge step — edit and restart.
 - **Instance host-side config**: The app directory and host port are set directly on the instance's service in `docker-compose.yml`, where you can see them next to everything else about that instance.
 - **Shared Dockerfile** (`.docker/Dockerfile`): All instances build from the same Dockerfile. Each instance picks its own CUDA base image, Python version, and PyTorch build via the `build.args` on its service in `docker-compose.yml`. An instance that needs a genuinely different build flow can still point its service's `build.dockerfile` at its own file.
-- **Namespaced volumes**: Each instance gets its own `<name>-home-data` and `<name>-temp-data` Docker volumes, keeping pip caches, pyenv installations, and sentinel files completely isolated.
+- **Namespaced volumes**: Each instance gets its own `<name>-home-data` and `<name>-temp-data` Docker volumes, keeping its virtualenv, installed packages, and sentinel files completely isolated.
+- **Python via uv**: [uv](https://docs.astral.sh/uv/) installs the requested Python as a prebuilt binary and manages the instance's virtualenv, so `PYTHON_VERSION` can be any version uv publishes without a source build.
 - **Shared models**: All instances bind-mount the same `MODELS_HOST_PATH` to `/ComfyUI/models`.
 - **Profiles**: Each instance declares a Compose profile matching its name, so `docker compose up` starts only the instance(s) you've selected rather than everything defined in the file. See [Switching between instances](#switching-between-instances).
 
@@ -96,7 +97,9 @@ docker compose build comfyui-legacy
 ## Reinstall Everything (per instance)
 1. `docker compose down -v` — this destroys all instance volumes. When you bring the container up again, all of its dependencies will be gone and freshly installed.
 
-> Note: try restarting and/or rebuilding the container first — the `<name>-temp-data` and `<name>-home-data` named volumes store installed pip packages so it might save you some time if that fixes it first.
+> Note: try restarting and/or rebuilding the container first — the `<name>-temp-data` and `<name>-home-data` named volumes store installed packages so it might save you some time if that fixes it first.
+
+> **Upgrading from a pyenv-era image?** The virtualenv now lives at `~/.venv` inside the `<name>-home-data` volume. Docker only seeds a named volume from the image when the volume is *empty*, so an existing volume will hide the new virtualenv and the container won't start. Run `docker compose down -v` once after rebuilding.
 
 ## Adding a New Instance
 
