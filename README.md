@@ -1,7 +1,7 @@
 ## Why Yet Another ComfyUI Docker Setup?
 I wanted to roll my own, mostly to try and build SageAttention.
 
-You may not find this useful. It's also not the most space-efficient.
+You may not find this useful.
 
 ## Requirements
 1. Docker / Docker Desktop - https://www.docker.com/
@@ -42,7 +42,8 @@ comfy-docker-2/
 - **Global config** (`.env`): Settings that apply to every instance — user identity (`UID`, `GID`, `USERNAME`), the shared `MODELS_HOST_PATH`, `TORCH_CUDA_ARCH_LIST`, and `COMPOSE_PROFILES`. Create it with `cp .env.dist .env`.
 - **Instance runtime config** (`instances/<name>/instance.env`): Per-instance settings passed into the running container (e.g. `COMFY_COMMANDLINE_SWITCHES`). Loaded directly by the service's `env_file`, so no prefixing and no merge step — edit and restart.
 - **Instance host-side config**: The host port and data directories are set directly on the instance's service in `docker-compose.yml`, where you can see them next to everything else about that instance.
-- **Shared Dockerfile** (`.docker/Dockerfile`): All instances build from the same Dockerfile. Each instance picks its own CUDA base image, Python version, PyTorch build and ComfyUI revision via the `build.args` on its service in `docker-compose.yml`. An instance that needs a genuinely different build flow can still point its service's `build.dockerfile` at its own file.
+- **Shared Dockerfile** (`.docker/Dockerfile`): All instances build from the same Dockerfile. Each instance picks its own CUDA images, Python version, PyTorch build and ComfyUI revision via the `build.args` on its service in `docker-compose.yml`. An instance that needs a genuinely different build flow can still point its service's `build.dockerfile` at its own file.
+- **Two-stage build**: Compiling happens on the CUDA *devel* image; the image you actually run is built on the matching CUDA *runtime* image with the virtualenv copied across, so the CUDA toolkit and headers don't ship. Each instance sets both `CUDA_BASE_IMAGE` and `CUDA_RUNTIME_IMAGE`, and they must be the same CUDA and Ubuntu version.
 - **The image is the environment**: ComfyUI, Python, PyTorch and SageAttention are all built into the image at a pinned `COMFYUI_REF`. Containers start in seconds and every rebuild is reproducible. Upgrading ComfyUI means bumping `COMFYUI_REF` and rebuilding — not `git pull` in a directory Docker happens to be watching.
 - **Python via uv**: [uv](https://docs.astral.sh/uv/) installs the requested Python as a prebuilt binary and manages the virtualenv at `/opt/venv`, so `PYTHON_VERSION` can be any version uv publishes without a source build.
 - **Only your data is mounted**: `custom_nodes`, `input`, `output` and `user` are bind-mounted per instance from `./data/<instance>/`; `models` is shared. Everything else lives in the image.
@@ -182,11 +183,14 @@ All instances build from the shared `.docker/Dockerfile`; the versions are contr
 
 ```yaml
       args:
-        CUDA_BASE_IMAGE: nvidia/cuda:12.6.0-cudnn-devel-ubuntu22.04   # CUDA version
-        PYTHON_VERSION: 3.11.9                                        # Python version
-        PYTORCH_INDEX_URL: https://download.pytorch.org/whl/cu126     # Match CUDA version
-        COMFYUI_REF: v0.3.40                                          # Tag, branch or SHA
+        CUDA_BASE_IMAGE: nvidia/cuda:12.6.0-cudnn-devel-ubuntu22.04     # builds on this
+        CUDA_RUNTIME_IMAGE: nvidia/cuda:12.6.0-cudnn-runtime-ubuntu22.04 # runs on this
+        PYTHON_VERSION: 3.11.9                                          # Python version
+        PYTORCH_INDEX_URL: https://download.pytorch.org/whl/cu126       # Match CUDA version
+        COMFYUI_REF: v0.3.40                                            # Tag, branch or SHA
 ```
+
+The two CUDA images must be the same CUDA and Ubuntu version — only `devel` vs `runtime` differs. The devel image supplies `nvcc` for compiling SageAttention; the runtime image is what you actually run.
 
 `COMFYUI_REF` is what makes instances genuinely independent — one can track `master` while another stays pinned to a release that your workflows are known to work on.
 
@@ -219,6 +223,7 @@ services:
       args:
         <<: *common-build-args
         CUDA_BASE_IMAGE: nvidia/cuda:12.6.0-cudnn-devel-ubuntu22.04
+        CUDA_RUNTIME_IMAGE: nvidia/cuda:12.6.0-cudnn-runtime-ubuntu22.04
         PYTHON_VERSION: 3.11.9
         PYTORCH_INDEX_URL: https://download.pytorch.org/whl/cu126
         COMFYUI_REF: v0.3.40
@@ -281,14 +286,12 @@ The ngrok inspection UI is on http://localhost:4040.
 
 ## Future Enhancements
 
-### Slim down the image
-- can we throw away the CUDA development image and switch it for the runtime image once sage is built?
-
 ### QoL/Misc.
 - bit more customisation over directories/custom directories:
 - ✅ configurable models/ path bind mount - point docker to an existing ComfyUI/models dir
 - ✅ multiple independent ComfyUI instances with decoupled dependencies
 - ✅ switch between instances / run them side-by-side via Compose profiles
 - ✅ SageAttention compiled at build time via `TORCH_CUDA_ARCH_LIST`
+- ✅ ship the CUDA runtime image instead of the devel image
 - different "modes"
 - idk, open to suggestions - open an issue <3
