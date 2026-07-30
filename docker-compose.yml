@@ -1,64 +1,67 @@
+# Build args shared by every instance. Merged into each service's build.args
+# with `<<: *common-build-args`, then extended with per-instance versions.
+x-common-build-args: &common-build-args
+  USER_ID: ${UID}
+  GROUP_ID: ${GID}
+  USERNAME: ${USERNAME}
+
+# Runtime configuration shared by every instance. Merged into each service with
+# `<<: *comfyui-base`. Note that YAML merge keys replace whole keys rather than
+# deep-merging, so anything a service overrides (build, volumes, ports) is
+# specified in full by that service.
+x-comfyui-base: &comfyui-base
+  user: "${UID}:${GID}"
+  working_dir: /ComfyUI
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - capabilities: [gpu]
+  restart: unless-stopped
+  networks:
+    internal:
+
 services:
   comfyui-default:
+    <<: *comfyui-base
+    profiles: ["default"]
     build:
       context: .
       dockerfile: ./.docker/Dockerfile
       args:
-        USER_ID: ${UID}
-        GROUP_ID: ${GID}
-        USERNAME: ${USERNAME}
+        <<: *common-build-args
         CUDA_BASE_IMAGE: nvidia/cuda:13.0.3-cudnn-devel-ubuntu24.04
         PYTHON_VERSION: 3.14.4
         PYTORCH_INDEX_URL: https://download.pytorch.org/whl/cu130
     env_file:
       - ./instances/default/instance.env
-    user: "${UID}:${GID}"
-    working_dir: /ComfyUI
     volumes:
       - ${DEFAULT_COMFY_HOST_PATH:-./ComfyUI}:/ComfyUI
       - default-home-data:/home/${USERNAME}
       - default-temp-data:/temp-data
       - ${MODELS_HOST_PATH:-./ComfyUI/models}:/ComfyUI/models
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - capabilities: [gpu]
     ports:
       - ${DEFAULT_HOST_PORT:-8188}:8188
-    restart: unless-stopped
-    networks:
-      internal:
   comfyui-legacy:
+    <<: *comfyui-base
+    profiles: ["legacy"]
     build:
       context: .
       dockerfile: ./.docker/Dockerfile
       args:
-        USER_ID: ${UID}
-        GROUP_ID: ${GID}
-        USERNAME: ${USERNAME}
+        <<: *common-build-args
         CUDA_BASE_IMAGE: nvidia/cuda:12.8.1-cudnn-devel-ubuntu22.04
         PYTHON_VERSION: 3.12.3
         PYTORCH_INDEX_URL: https://download.pytorch.org/whl/cu128
     env_file:
       - ./instances/legacy/instance.env
-    user: "${UID}:${GID}"
-    working_dir: /ComfyUI
     volumes:
       - ${LEGACY_COMFY_HOST_PATH:-./ComfyUI-legacy}:/ComfyUI
       - legacy-home-data:/home/${USERNAME}
       - legacy-temp-data:/temp-data
       - ${MODELS_HOST_PATH:-./ComfyUI/models}:/ComfyUI/models
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - capabilities: [gpu]
     ports:
       - ${LEGACY_HOST_PORT:-8189}:8188
-    restart: unless-stopped
-    networks:
-      internal:
 networks:
   internal:
 volumes:

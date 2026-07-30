@@ -36,9 +36,10 @@ comfy-docker-2/
 - **Shared Dockerfile** (`.docker/Dockerfile`): All instances build from the same Dockerfile. Each instance picks its own CUDA base image, Python version, and PyTorch build via the `build.args` on its service in `docker-compose.yml`. An instance that needs a genuinely different build flow can still point its service's `build.dockerfile` at its own file.
 - **Namespaced volumes**: Each instance gets its own `<name>-home-data` and `<name>-temp-data` Docker volumes, keeping pip caches, pyenv installations, and sentinel files completely isolated.
 - **Shared models**: All instances bind-mount the same `MODELS_HOST_PATH` to `/ComfyUI/models`.
+- **Profiles**: Each instance declares a Compose profile matching its name, so `docker compose up` starts only the instance(s) you've selected rather than everything defined in the file. See [Switching between instances](#switching-between-instances).
 
 ## Setup
-1. Edit `.env.dist` with your global settings (UID, GID, USERNAME, and optionally MODELS_HOST_PATH)
+1. Edit `.env.dist` with your global settings (UID, GID, USERNAME, `COMPOSE_PROFILES`, and optionally MODELS_HOST_PATH)
 2. Review/edit `instances/default/instance.env` for instance-specific settings (host path, port, CLI switches)
 3. Generate `.env` by concatenating global + instance configs:
    ```sh
@@ -52,6 +53,46 @@ comfy-docker-2/
 > By default the container will install all of comfy's dependencies, torch etc., and compile SageAttention once its up and running.
 >
 > It's gonna take a while.
+
+## Switching between instances
+
+Every instance declares a Compose profile named after it, so nothing starts unless you ask for it by name. This is what makes `docker compose up -d` mean "start what I'm actually using" instead of "start everything I've ever defined".
+
+**Pick your daily driver** in `.env`:
+
+```env
+COMPOSE_PROFILES=default
+```
+
+```sh
+docker compose up -d          # starts comfyui-default only
+```
+
+**Run several side-by-side** — they get different ports (8188, 8189) and separate volumes, but share the same models directory:
+
+```env
+COMPOSE_PROFILES=default,legacy
+```
+
+```sh
+docker compose up -d          # starts both
+```
+
+**Switch for one command** without editing `.env` — a `--profile` flag replaces the `.env` selection for that invocation:
+
+```sh
+docker compose --profile legacy up -d
+docker compose --profile legacy down
+```
+
+Commands that target a service by name (`logs`, `exec`, `build`) work regardless of the active profile:
+
+```sh
+docker compose logs -f comfyui-legacy
+docker compose build comfyui-legacy
+```
+
+> Watch your VRAM when running side-by-side — each instance loads its own models into the GPU.
 
 ## Reinstall Everything (per instance)
 1. `docker compose down -v` — this destroys all instance volumes. When you bring the container up again, all of its dependencies will be gone and freshly installed.
@@ -98,42 +139,32 @@ The host-side variable names must be instance-prefixed (matching what you refere
 
 ### 4. Add the service to docker-compose.yml
 
-Add a new service block to `docker-compose.yml`. Copy the `comfyui-default` block and adjust:
+Add a new service block to `docker-compose.yml`. Shared settings come from the `*comfyui-base` and `*common-build-args` anchors, so the block only has to state what's specific to this instance:
 
 ```yaml
 services:
   # ... existing comfyui-default block ...
 
   comfyui-my-new-instance:
+    <<: *comfyui-base
+    profiles: ["my-new-instance"]
     build:
       context: .
       dockerfile: ./.docker/Dockerfile
       args:
-        USER_ID: ${UID}
-        GROUP_ID: ${GID}
-        USERNAME: ${USERNAME}
+        <<: *common-build-args
         CUDA_BASE_IMAGE: nvidia/cuda:12.6.0-cudnn-devel-ubuntu22.04
         PYTHON_VERSION: 3.11.9
         PYTORCH_INDEX_URL: https://download.pytorch.org/whl/cu126
     env_file:
       - ./instances/my-new-instance/instance.env
-    user: "${UID}:${GID}"
-    working_dir: /ComfyUI
     volumes:
       - ${MY_NEW_INSTANCE_COMFY_HOST_PATH:-./ComfyUI-nightly}:/ComfyUI
       - my-new-instance-home-data:/home/${USERNAME}
       - my-new-instance-temp-data:/temp-data
       - ${MODELS_HOST_PATH:-./ComfyUI/models}:/ComfyUI/models
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - capabilities: [gpu]
     ports:
-      - ${MY_NEW_INSTANCE_HOST_PORT:-8189}:8188
-    restart: unless-stopped
-    networks:
-      internal:
+      - ${MY_NEW_INSTANCE_HOST_PORT:-8190}:8188
 
 volumes:
   # ... existing volumes ...
@@ -141,8 +172,12 @@ volumes:
   my-new-instance-home-data:
 ```
 
+`<<: *comfyui-base` supplies `user`, `working_dir`, the GPU reservation, `restart` and `networks`. It deliberately doesn't supply `build`, `volumes` or `ports` — YAML merge keys replace a key outright rather than deep-merging, so anything an instance customises has to be written out in full.
+
 **Important things to note:**
+- The **profile name** is how you start this instance: `docker compose --profile my-new-instance up -d`, or add it to `COMPOSE_PROFILES` in `.env`.
 - The volume names **must** be unique per instance (e.g., `my-new-instance-home-data`).
+- The **host port** must not collide with another instance's (8188 and 8189 are taken by `default` and `legacy`).
 - Host-side variable names (`COMFY_HOST_PATH`, `HOST_PORT`) must be instance-prefixed to avoid collisions when merged into `.env`.
 - All instances share the same `MODELS_HOST_PATH` bind mount and `internal` network.
 
@@ -161,9 +196,9 @@ git clone https://github.com/comfyanonymous/ComfyUI.git ComfyUI-nightly
 cat .env.dist instances/*/instance.env > .env
 
 # Build and start only the new instance
-docker compose up -d comfyui-my-new-instance
+docker compose --profile my-new-instance up -d
 
-# Or build and start everything
+# Or add it to COMPOSE_PROFILES in .env to start it alongside the others
 docker compose up -d
 ```
 
@@ -173,7 +208,7 @@ I've added an ngrok container definition to suit my needs; at present, you'll ne
 
 `docker-compose -f docker-compose.yml -f docker-compose.ngrok.yml up -d`
 
-> Note: The ngrok overlay currently proxies `comfyui-default`. To tunnel a different instance, update the target URL in `docker-compose.ngrok.yml`.
+> Note: The ngrok overlay currently proxies `comfyui-default`. To tunnel a different instance, update the target URL in `docker-compose.ngrok.yml` — and make sure that instance's profile is active, or there'll be nothing listening at the other end of the tunnel.
 
 ### Slim down the image
 - can we throw away the CUDA development image and switch it for the runtime image once sage is built?
@@ -185,5 +220,6 @@ I've added an ngrok container definition to suit my needs; at present, you'll ne
 - bit more customisation over directories/custom directories:
 - ✅ configurable models/ path bind mount - point docker to an existing ComfyUI/models dir
 - ✅ multiple independent ComfyUI instances with decoupled dependencies
+- ✅ switch between instances / run them side-by-side via Compose profiles
 - different "modes"
 - idk, open to suggestions - open an issue <3
