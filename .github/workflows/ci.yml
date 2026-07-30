@@ -1,0 +1,205 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  # Uncomment to also run the full SageAttention build weekly, catching
+  # upstream drift without anyone having to remember to trigger it.
+  # schedule:
+  #   - cron: "0 4 * * 1"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Makes the images Compose builds predictably named: comfyci-comfyui-<instance>
+  COMPOSE_PROJECT_NAME: comfyci
+  # Build steps name their service explicitly, so every profile needs to be
+  # active for Compose to consider it.
+  COMPOSE_PROFILES: default,legacy
+
+jobs:
+  # Seconds, and no Docker daemon needed. Catches most mistakes.
+  lint:
+    name: Lint and validate config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate compose config resolves
+        run: |
+          cp .env.dist .env
+          docker compose config --quiet
+          docker compose -f docker-compose.yml -f docker-compose.ngrok.yml config --quiet
+
+      - name: Check each instance's profile selects exactly its own service
+        run: |
+          cp .env.dist .env
+          for instance in $(ls instances); do
+            services=$(COMPOSE_PROFILES= docker compose --profile "$instance" config --services)
+            if [ "$services" != "comfyui-$instance" ]; then
+              echo "::error::profile '$instance' resolved to '$services', expected 'comfyui-$instance'"
+              exit 1
+            fi
+            echo "profile '$instance' -> $services"
+          done
+
+      - name: Check instances declare a pinned ComfyUI ref
+        run: |
+          cp .env.dist .env
+          # A branch name silently goes stale because Docker caches the clone
+          # layer against the literal ref. See "Pinning ComfyUI versions".
+          refs=$(docker compose config | grep -oP 'COMFYUI_REF:\s*\K\S+')
+          echo "$refs"
+          for ref in $refs; do
+            case "$ref" in
+              v[0-9]*|[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]*) ;;
+              *) echo "::error::COMFYUI_REF '$ref' looks like a branch; use a tag or commit SHA"; exit 1 ;;
+            esac
+          done
+
+      - name: Check instance.env files carry no host-side settings
+        run: |
+          # These belong on the service in docker-compose.yml. Catching them
+          # here stops the old prefixed-variable pattern creeping back.
+          if grep -nE '^(.*_)?(COMFY_HOST_PATH|HOST_PORT)=' instances/*/instance.env; then
+            echo "::error::host-side settings belong on the service in docker-compose.yml"
+            exit 1
+          fi
+
+      - name: Shellcheck entrypoint scripts
+        run: |
+          sudo apt-get update && sudo apt-get install -y shellcheck
+          shellcheck .docker/scripts/*.sh
+
+      - name: Hadolint Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: .docker/Dockerfile
+          # Warnings are advisory here; apt and pip versions are deliberately
+          # unpinned because CUDA, Python and ComfyUI versions are pinned via
+          # build args instead.
+          failure-threshold: error
+          ignore: DL3008,DL3013,DL3003
+
+  # Builds each instance without the SageAttention compile, which is the slow
+  # part. Still exercises the base images, apt, uv, the pinned ComfyUI clone,
+  # torch, ComfyUI's requirements and the multi-stage copy.
+  build:
+    name: Build ${{ matrix.instance }} (no SageAttention)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        instance: [default, legacy]
+    steps:
+      - uses: actions/checkout@v4
+
+      # These images don't fit in a default runner's ~20GB.
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          large-packages: false   # slow, and freeing the tool cache is usually enough
+
+      - name: Build
+        env:
+          # Empty makes the Dockerfile skip the SageAttention build. Everything
+          # else still runs.
+          TORCH_CUDA_ARCH_LIST: ""
+        run: |
+          cp .env.dist .env
+          docker compose build comfyui-${{ matrix.instance }}
+          docker images
+
+      # Checks the image is coherent, not merely that it built. Anything
+      # needing an actual GPU can't be tested here.
+      - name: Smoke test
+        run: |
+          # Compose derives the image name from the project and service. Find
+          # it rather than assuming the separator, and fail loudly if it's not
+          # where we expect.
+          IMAGE=$(docker images --format '{{.Repository}}:{{.Tag}}' \
+                  | grep -E "^comfyci[-_]comfyui-${{ matrix.instance }}:" | head -1)
+          if [ -z "$IMAGE" ]; then
+            echo "::error::couldn't find the built image"
+            docker images
+            exit 1
+          fi
+          echo "testing $IMAGE"
+          set -x
+
+          # The interpreter survived being copied into the runtime image —
+          # the main risk in the two-stage build.
+          docker run --rm --entrypoint bash "$IMAGE" -c 'python --version'
+
+          # torch imports. CUDA is unavailable on this runner, which is fine;
+          # we're checking the install isn't broken, not that a GPU exists.
+          docker run --rm --entrypoint bash "$IMAGE" \
+            -c 'python -c "import torch, torchvision, torchaudio; print(torch.__version__)"'
+
+          # ComfyUI is present at the ref we pinned.
+          docker run --rm --entrypoint bash "$IMAGE" -c 'git -C /ComfyUI describe --tags'
+
+          # ComfyUI's own imports resolve against the installed dependencies.
+          # --help exits at argument parsing, so no GPU and no server start.
+          docker run --rm --entrypoint bash "$IMAGE" -c 'cd /ComfyUI && python main.py --help > /dev/null'
+
+          # The entrypoint explains itself when SageAttention was skipped,
+          # rather than failing somewhere inside ComfyUI.
+          if docker run --rm \
+               -e SKIP_CUSTOM_NODE_INSTALL=1 \
+               -e COMFY_COMMANDLINE_SWITCHES=--use-sage-attention \
+               "$IMAGE" 2>&1 | grep -q "SageAttention isn't installed"; then
+            echo "entrypoint guard fired as expected"
+          else
+            echo "::error::entrypoint should have refused --use-sage-attention"
+            exit 1
+          fi
+
+  # The full build including the SageAttention compile: slow and disk-hungry,
+  # so it's manual (or scheduled, if you uncomment the trigger above). Worth
+  # running before merging anything that touches the build.
+  build-full:
+    name: Build ${{ matrix.instance }} with SageAttention
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        instance: [default, legacy]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          large-packages: true
+          docker-images: true
+
+      - name: Build with SageAttention
+        env:
+          # One architecture keeps the compile as short as possible. This is
+          # checking that it compiles at all, not producing a shippable image.
+          TORCH_CUDA_ARCH_LIST: "8.9"
+        run: |
+          cp .env.dist .env
+          docker compose build comfyui-${{ matrix.instance }}
+
+      - name: Verify SageAttention is importable
+        run: |
+          IMAGE=$(docker images --format '{{.Repository}}:{{.Tag}}' \
+                  | grep -E "^comfyci[-_]comfyui-${{ matrix.instance }}:" | head -1)
+          if [ -z "$IMAGE" ]; then
+            echo "::error::couldn't find the built image"
+            docker images
+            exit 1
+          fi
+          docker run --rm --entrypoint bash "$IMAGE" \
+            -c 'python -c "import sageattention; print(\"sageattention OK\")"'

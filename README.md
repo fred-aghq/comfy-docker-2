@@ -318,6 +318,17 @@ The target instance's profile has to be active, or there'll be nothing listening
 
 The ngrok inspection UI is on http://localhost:4040.
 
+## CI
+
+`.github/workflows/ci.yml` runs on every pull request:
+
+- **Lint and validate config** (seconds) — compose files resolve, each instance's profile selects exactly its own service, `COMFYUI_REF` is a tag or SHA rather than a branch, `instance.env` files haven't regrown host-side settings, plus shellcheck and hadolint.
+- **Build each instance** (~30–60 min) with `TORCH_CUDA_ARCH_LIST` empty, which skips the SageAttention compile but still exercises the base images, apt, uv, the pinned ComfyUI clone, torch, ComfyUI's requirements and the multi-stage copy. Then smoke-tests the image: the interpreter survives the copy into the runtime stage, torch imports, ComfyUI is at the pinned ref and its own imports resolve.
+
+The **full build including SageAttention** is manual — run it from the Actions tab before merging anything that touches the build. It's slow (the compile dominates) and needs most of the runner's disk, so it isn't worth it per-PR. There's a commented-out weekly schedule if you'd rather it ran on its own.
+
+> **CI proves the images build, never that they run.** Every runtime question — whether CUDA is actually available, whether a workflow executes, whether SageAttention is fast — needs a real GPU, and GitHub's free runners don't have one. Treat CI as a regression net for build breakage, and keep testing on your own machine.
+
 ## Future Enhancements
 
 ### QoL/Misc.
