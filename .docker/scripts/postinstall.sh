@@ -7,8 +7,8 @@ if [ ! -f "/temp-data/.removeToReinstall" ]; then
     cp -r /tmp/builtime-pip-install/* "$SITE_PACKAGES/"
     # pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128
     cd /ComfyUI
-    pip install -r requirements.txt
-    pip install ninja
+    uv pip install -r requirements.txt
+    uv pip install ninja
     cd /temp-data;
     git clone https://github.com/thu-ml/SageAttention.git
     cd SageAttention

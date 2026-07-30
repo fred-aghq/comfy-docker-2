@@ -11,7 +11,9 @@ for dir in */ ; do
         # Check if requirements.txt exists
         if [ -f "requirements.txt" ]; then
             echo "Installing requirements in $dir"
-            pip install -r requirements.txt
+            # If a node's requirements.txt trips uv's stricter parsing, plain
+            # `pip install` is still available in the venv as a fallback.
+            uv pip install -r requirements.txt
         else
             echo "No requirements.txt in $dir, skipping."
         fi
