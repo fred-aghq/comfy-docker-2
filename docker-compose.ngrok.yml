@@ -3,7 +3,7 @@ services:
       image: ngrok/ngrok:latest
       command:
         - "http"
-        - "http://comfyui:8188"
+        - "http://comfyui-default:8188"
         - "--traffic-policy-file"
         - "/etc/policy.yaml"
         # - "--url"

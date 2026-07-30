@@ -1,20 +1,23 @@
 services:
-  comfyui:
+  comfyui-default:
     build:
       context: .
-      dockerfile: ./.docker/Dockerfile.main
+      dockerfile: ./instances/default/Dockerfile
       args:
         USER_ID: ${UID}
         GROUP_ID: ${GID}
         USERNAME: ${USERNAME}
-    environment:
-      - COMFY_COMMANDLINE_SWITCHES=${COMFY_COMMANDLINE_SWITCHES}
+        CUDA_BASE_IMAGE: nvidia/cuda:13.0.3-cudnn-devel-ubuntu24.04
+        PYTHON_VERSION: 3.14.4
+        PYTORCH_INDEX_URL: https://download.pytorch.org/whl/cu130
+    env_file:
+      - ./instances/default/instance.env
     user: "${UID}:${GID}"
     working_dir: /ComfyUI
     volumes:
-      - ${COMFY_HOST_PATH:-./ComfyUI}:/ComfyUI
-      - home-data:/home/${USERNAME}
-      - temp-data:/temp-data
+      - ${DEFAULT_COMFY_HOST_PATH:-./ComfyUI}:/ComfyUI
+      - default-home-data:/home/${USERNAME}
+      - default-temp-data:/temp-data
       - ${MODELS_HOST_PATH:-./ComfyUI/models}:/ComfyUI/models
     deploy:
       resources:
@@ -22,12 +25,12 @@ services:
           devices:
             - capabilities: [gpu]
     ports:
-      - 8188:8188
+      - ${DEFAULT_HOST_PORT:-8188}:8188
     restart: unless-stopped
     networks:
       internal:
 networks:
   internal:
 volumes:
-  temp-data:
-  home-data:
+  default-temp-data:
+  default-home-data:

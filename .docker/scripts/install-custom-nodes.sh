@@ -1,3 +1,5 @@
+#!/bin/bash
+
 cd /ComfyUI/custom_nodes
 
 for dir in */ ; do
@@ -18,4 +20,3 @@ for dir in */ ; do
         cd ..
     fi
 done
-
