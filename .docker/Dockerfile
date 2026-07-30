@@ -30,8 +30,10 @@ RUN uv python install ${PYTHON_VERSION} && \
     uv venv --python ${PYTHON_VERSION} --seed ${VIRTUAL_ENV} && \
     uv pip install setuptools wheel
 
-# ComfyUI itself, pinned. Bump COMFYUI_REF and rebuild to upgrade.
-ARG COMFYUI_REF=master
+# ComfyUI itself. COMFYUI_REF takes a tag, branch or commit SHA; the clone is
+# deliberately not shallow so that arbitrary SHAs work. Prefer a tag — see
+# "Pinning ComfyUI versions" in the README for why a branch name goes stale.
+ARG COMFYUI_REF
 RUN git clone https://github.com/comfyanonymous/ComfyUI.git /ComfyUI && \
     git -C /ComfyUI checkout --detach ${COMFYUI_REF}
 
@@ -46,7 +48,7 @@ RUN uv pip install -r /ComfyUI/requirements.txt && \
 # architecture table in the README. Leave it empty to skip SageAttention
 # entirely (and drop --use-sage-attention from that instance's switches).
 ARG TORCH_CUDA_ARCH_LIST
-ARG SAGEATTENTION_REF=main
+ARG SAGEATTENTION_REF=v2.2.0
 RUN if [ -n "${TORCH_CUDA_ARCH_LIST}" ]; then \
         git clone https://github.com/thu-ml/SageAttention.git /tmp/sageattention && \
         git -C /tmp/sageattention checkout --detach ${SAGEATTENTION_REF} && \

@@ -123,11 +123,24 @@ docker compose build comfyui-legacy
 
 > Watch your VRAM when running side-by-side — each instance loads its own models into the GPU.
 
+## Pinning ComfyUI versions
+
+`COMFYUI_REF` accepts a tag, a branch name, or a commit SHA — the clone isn't shallow, so any of them work. Both shipped instances are pinned to release tags:
+
+| Instance | `COMFYUI_REF` |
+|---|---|
+| `default` | `v0.29.0` |
+| `legacy` | `v0.19.2` |
+
+> **Prefer tags and SHAs over branch names.** Docker caches the clone layer against the *literal* value of `COMFYUI_REF`, not against what that ref currently points at. Changing `v0.29.0` → `v0.29.1` changes the layer's cache key and re-clones correctly. But leaving it at `master` means the cache key never changes, so rebuilds keep resurrecting whatever master was the last time something invalidated the cache — you get a stale ComfyUI with no indication that's what happened. If you do want to track a branch, force it with `docker compose build --no-cache <service>`.
+
+The same applies to `SAGEATTENTION_REF`, which is pinned to `v2.2.0` in `.docker/Dockerfile`.
+
 ## Upgrading and reinstalling
 
 The environment lives in the image, so both are rebuilds rather than volume surgery. Your models, workflows, outputs and custom nodes are in `./data/` and aren't touched by any of this.
 
-**Upgrade ComfyUI** — bump `COMFYUI_REF` on the instance's service in `docker-compose.yml` (a tag, branch or commit SHA), then:
+**Upgrade ComfyUI** — bump `COMFYUI_REF` on the instance's service in `docker-compose.yml` to a newer tag, then:
 
 ```sh
 docker compose up -d --build comfyui-default
@@ -148,24 +161,45 @@ docker compose up -d comfyui-default
 
 Earlier versions bind-mounted a whole ComfyUI checkout from the host (`./ComfyUI`, `./ComfyUI-legacy`) and installed dependencies into named volumes at runtime. ComfyUI now lives in the image and only your data is mounted.
 
-Move the directories worth keeping out of your old checkout:
+**1. Find out what version you're currently on**, so you can pin the instance to it rather than silently jumping forward:
 
 ```sh
-mkdir -p data/models data/default/{custom_nodes,input,output,user}
-
-mv ComfyUI/custom_nodes/*  data/default/custom_nodes/   2>/dev/null
-mv ComfyUI/input/*         data/default/input/          2>/dev/null
-mv ComfyUI/output/*        data/default/output/         2>/dev/null
-mv ComfyUI/user/*          data/default/user/           2>/dev/null
+git -C ComfyUI describe --tags
 ```
+
+Set that tag as the instance's `COMFYUI_REF` in `docker-compose.yml`. The `legacy` instance ships pinned to `v0.19.2` for exactly this purpose — an existing install moved across unchanged. Upgrade later by bumping the tag, once you know the move itself worked.
+
+**2. Move your data out of the old checkout.** Custom nodes come across as-is, including their `.git` directories, so ComfyUI-Manager keeps working:
+
+```sh
+mkdir -p data/models data/legacy/{custom_nodes,input,output,user}
+
+mv ComfyUI/custom_nodes/*  data/legacy/custom_nodes/   2>/dev/null
+mv ComfyUI/input/*         data/legacy/input/          2>/dev/null
+mv ComfyUI/output/*        data/legacy/output/         2>/dev/null
+mv ComfyUI/user/*          data/legacy/user/           2>/dev/null
+```
+
+`user/` is the one people forget — it holds your saved workflows and UI settings.
 
 For models, either move them into `data/models/` or leave them where they are and point `MODELS_HOST_PATH` at the existing directory — no need to shuffle a few hundred gigabytes.
 
-Then drop the old named volumes and the old checkout once you're happy:
+**3. Build and start.** Your custom nodes' Python dependencies are installed on first start, so this boot is slower than subsequent ones:
+
+```sh
+docker compose up -d --build comfyui-legacy
+docker compose logs -f comfyui-legacy
+```
+
+**4. Clean up** once you're happy it works:
 
 ```sh
 docker compose down -v          # removes the now-unused *-home-data / *-temp-data volumes
 ```
+
+Keep the old `ComfyUI/` checkout around until you've confirmed everything loads — it costs nothing but disk, and it's your rollback.
+
+> **A custom node that used to work may now fail to import.** Previously every dependency landed in one shared site-packages that had accumulated over time; now the image starts from ComfyUI's own requirements plus whatever your nodes declare. A node that quietly relied on a package it never declared will surface that. The fix is normally to add the missing package to that node's `requirements.txt`, or `docker compose exec comfyui-legacy uv pip install <package>` to confirm the diagnosis before making it permanent.
 
 ## Adding a New Instance
 
@@ -192,7 +226,7 @@ All instances build from the shared `.docker/Dockerfile`; the versions are contr
 
 The two CUDA images must be the same CUDA and Ubuntu version — only `devel` vs `runtime` differs. The devel image supplies `nvcc` for compiling SageAttention; the runtime image is what you actually run.
 
-`COMFYUI_REF` is what makes instances genuinely independent — one can track `master` while another stays pinned to a release that your workflows are known to work on.
+`COMFYUI_REF` is what makes instances genuinely independent — one can sit on the latest release while another stays pinned to an older one your workflows are known to work on. Use a tag or SHA rather than a branch name; see [Pinning ComfyUI versions](#pinning-comfyui-versions).
 
 If an instance needs deeper changes (different system packages, a different build flow entirely), copy `.docker/Dockerfile` into the instance directory and point the service's `build.dockerfile` at it — everything else keeps working the same way.
 
