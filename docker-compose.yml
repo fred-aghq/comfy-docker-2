@@ -4,6 +4,7 @@ x-common-build-args: &common-build-args
   USER_ID: ${UID}
   GROUP_ID: ${GID}
   USERNAME: ${USERNAME}
+  TORCH_CUDA_ARCH_LIST: ${TORCH_CUDA_ARCH_LIST:-}
 
 # Runtime configuration shared by every instance. Merged into each service with
 # `<<: *comfyui-base`. Note that YAML merge keys replace whole keys rather than
@@ -33,13 +34,15 @@ services:
         CUDA_BASE_IMAGE: nvidia/cuda:13.0.3-cudnn-devel-ubuntu24.04
         PYTHON_VERSION: 3.14.4
         PYTORCH_INDEX_URL: https://download.pytorch.org/whl/cu130
+        COMFYUI_REF: master
     env_file:
       - ./instances/default/instance.env
     volumes:
-      - ./ComfyUI:/ComfyUI
-      - default-home-data:/home/${USERNAME}
-      - default-temp-data:/temp-data
-      - ${MODELS_HOST_PATH:-./ComfyUI/models}:/ComfyUI/models
+      - ${MODELS_HOST_PATH:-./data/models}:/ComfyUI/models
+      - ./data/default/custom_nodes:/ComfyUI/custom_nodes
+      - ./data/default/input:/ComfyUI/input
+      - ./data/default/output:/ComfyUI/output
+      - ./data/default/user:/ComfyUI/user
     ports:
       - "8188:8188"
   comfyui-legacy:
@@ -53,19 +56,16 @@ services:
         CUDA_BASE_IMAGE: nvidia/cuda:12.8.1-cudnn-devel-ubuntu22.04
         PYTHON_VERSION: 3.12.3
         PYTORCH_INDEX_URL: https://download.pytorch.org/whl/cu128
+        COMFYUI_REF: master
     env_file:
       - ./instances/legacy/instance.env
     volumes:
-      - ./ComfyUI-legacy:/ComfyUI
-      - legacy-home-data:/home/${USERNAME}
-      - legacy-temp-data:/temp-data
-      - ${MODELS_HOST_PATH:-./ComfyUI/models}:/ComfyUI/models
+      - ${MODELS_HOST_PATH:-./data/models}:/ComfyUI/models
+      - ./data/legacy/custom_nodes:/ComfyUI/custom_nodes
+      - ./data/legacy/input:/ComfyUI/input
+      - ./data/legacy/output:/ComfyUI/output
+      - ./data/legacy/user:/ComfyUI/user
     ports:
       - "8189:8188"
 networks:
   internal:
-volumes:
-  default-temp-data:
-  default-home-data:
-  legacy-temp-data:
-  legacy-home-data:

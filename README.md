@@ -25,6 +25,13 @@ comfy-docker-2/
 │   │   └── install-custom-nodes.sh       # Shared custom-node installer
 │   └── ngrok/
 │       └── policy.yaml                   # Optional ngrok traffic policy
+├── data/                                 # Your stuff (gitignored)
+│   ├── models/                           # Shared across instances
+│   └── <instance>/                       # Per-instance mutable dirs
+│       ├── custom_nodes/
+│       ├── input/
+│       ├── output/
+│       └── user/                         # Workflows and settings
 ├── docker-compose.yml                    # Service definitions (one per instance)
 ├── docker-compose.ngrok.yml              # Optional ngrok overlay
 ├── .env.dist                             # Global config template (UID, GID, models path)
@@ -32,27 +39,48 @@ comfy-docker-2/
 ```
 
 **Key concepts:**
-- **Global config** (`.env`): Settings that apply to every instance — user identity (`UID`, `GID`, `USERNAME`), the shared `MODELS_HOST_PATH`, and `COMPOSE_PROFILES`. Create it with `cp .env.dist .env`.
+- **Global config** (`.env`): Settings that apply to every instance — user identity (`UID`, `GID`, `USERNAME`), the shared `MODELS_HOST_PATH`, `TORCH_CUDA_ARCH_LIST`, and `COMPOSE_PROFILES`. Create it with `cp .env.dist .env`.
 - **Instance runtime config** (`instances/<name>/instance.env`): Per-instance settings passed into the running container (e.g. `COMFY_COMMANDLINE_SWITCHES`). Loaded directly by the service's `env_file`, so no prefixing and no merge step — edit and restart.
-- **Instance host-side config**: The app directory and host port are set directly on the instance's service in `docker-compose.yml`, where you can see them next to everything else about that instance.
-- **Shared Dockerfile** (`.docker/Dockerfile`): All instances build from the same Dockerfile. Each instance picks its own CUDA base image, Python version, and PyTorch build via the `build.args` on its service in `docker-compose.yml`. An instance that needs a genuinely different build flow can still point its service's `build.dockerfile` at its own file.
-- **Namespaced volumes**: Each instance gets its own `<name>-home-data` and `<name>-temp-data` Docker volumes, keeping its virtualenv, installed packages, and sentinel files completely isolated.
-- **Python via uv**: [uv](https://docs.astral.sh/uv/) installs the requested Python as a prebuilt binary and manages the instance's virtualenv, so `PYTHON_VERSION` can be any version uv publishes without a source build.
-- **Shared models**: All instances bind-mount the same `MODELS_HOST_PATH` to `/ComfyUI/models`.
+- **Instance host-side config**: The host port and data directories are set directly on the instance's service in `docker-compose.yml`, where you can see them next to everything else about that instance.
+- **Shared Dockerfile** (`.docker/Dockerfile`): All instances build from the same Dockerfile. Each instance picks its own CUDA base image, Python version, PyTorch build and ComfyUI revision via the `build.args` on its service in `docker-compose.yml`. An instance that needs a genuinely different build flow can still point its service's `build.dockerfile` at its own file.
+- **The image is the environment**: ComfyUI, Python, PyTorch and SageAttention are all built into the image at a pinned `COMFYUI_REF`. Containers start in seconds and every rebuild is reproducible. Upgrading ComfyUI means bumping `COMFYUI_REF` and rebuilding — not `git pull` in a directory Docker happens to be watching.
+- **Python via uv**: [uv](https://docs.astral.sh/uv/) installs the requested Python as a prebuilt binary and manages the virtualenv at `/opt/venv`, so `PYTHON_VERSION` can be any version uv publishes without a source build.
+- **Only your data is mounted**: `custom_nodes`, `input`, `output` and `user` are bind-mounted per instance from `./data/<instance>/`; `models` is shared. Everything else lives in the image.
 - **Profiles**: Each instance declares a Compose profile matching its name, so `docker compose up` starts only the instance(s) you've selected rather than everything defined in the file. See [Switching between instances](#switching-between-instances).
 
 ## Setup
-1. Create your global config and edit it (UID, GID, USERNAME, `COMPOSE_PROFILES`, and optionally MODELS_HOST_PATH):
+
+1. Create your global config and edit it — UID, GID, USERNAME, `TORCH_CUDA_ARCH_LIST` (see [GPU architecture](#gpu-architecture)), `COMPOSE_PROFILES`, and optionally `MODELS_HOST_PATH`:
    ```sh
    cp .env.dist .env
    ```
-2. Review/edit `instances/default/instance.env` for that instance's runtime settings (CLI switches)
-3. `git clone https://github.com/comfyanonymous/ComfyUI.git`
-4. `docker compose up -d`
+2. Create the data directories, so they belong to you rather than to root:
+   ```sh
+   mkdir -p data/models data/default/{custom_nodes,input,output,user}
+   ```
+3. Review/edit `instances/default/instance.env` for that instance's runtime settings (CLI switches)
+4. Build and start:
+   ```sh
+   docker compose up -d --build
+   ```
 
-> By default the container will install all of comfy's dependencies, torch etc., and compile SageAttention once its up and running.
->
-> It's gonna take a while.
+> The first build compiles SageAttention, so it's gonna take a while. Every build after that is cached, and containers start in seconds — the long wait no longer happens on every fresh container, only when you change what's in the image.
+
+## GPU architecture
+
+SageAttention is compiled during the image build, and a build has no GPU to detect, so you have to say which architecture to target. Set `TORCH_CUDA_ARCH_LIST` in `.env`:
+
+| GPU generation | Architecture | `TORCH_CUDA_ARCH_LIST` |
+|---|---|---|
+| RTX 30xx (3060–3090 Ti) | Ampere | `8.6` |
+| RTX 40xx (4060–4090) | Ada Lovelace | `8.9` |
+| RTX 50xx (5060–5090) | Blackwell | `12.0` |
+
+Also useful: A100 is `8.0`, H100 is `9.0`.
+
+You can target several at once by separating them with semicolons — `8.6;8.9` produces an image that works on both a 3090 and a 4090, at the cost of a longer build and a bigger image.
+
+> Leave `TORCH_CUDA_ARCH_LIST` empty to skip building SageAttention entirely. If you do, also remove `--use-sage-attention` from your instances' `COMFY_COMMANDLINE_SWITCHES`, or ComfyUI won't start.
 
 ## Switching between instances
 
@@ -94,12 +122,49 @@ docker compose build comfyui-legacy
 
 > Watch your VRAM when running side-by-side — each instance loads its own models into the GPU.
 
-## Reinstall Everything (per instance)
-1. `docker compose down -v` — this destroys all instance volumes. When you bring the container up again, all of its dependencies will be gone and freshly installed.
+## Upgrading and reinstalling
 
-> Note: try restarting and/or rebuilding the container first — the `<name>-temp-data` and `<name>-home-data` named volumes store installed packages so it might save you some time if that fixes it first.
+The environment lives in the image, so both are rebuilds rather than volume surgery. Your models, workflows, outputs and custom nodes are in `./data/` and aren't touched by any of this.
 
-> **Upgrading from a pyenv-era image?** The virtualenv now lives at `~/.venv` inside the `<name>-home-data` volume. Docker only seeds a named volume from the image when the volume is *empty*, so an existing volume will hide the new virtualenv and the container won't start. Run `docker compose down -v` once after rebuilding.
+**Upgrade ComfyUI** — bump `COMFYUI_REF` on the instance's service in `docker-compose.yml` (a tag, branch or commit SHA), then:
+
+```sh
+docker compose up -d --build comfyui-default
+```
+
+**Rebuild from scratch** (the equivalent of the old `down -v`):
+
+```sh
+docker compose build --no-cache comfyui-default
+docker compose up -d comfyui-default
+```
+
+**Reset a custom node's dependencies** — the one thing still installed at runtime. Remove the node from `./data/<instance>/custom_nodes/` and restart.
+
+> Startup reinstalls custom-node requirements every time, which is quick with uv but not free. Once you're settled, set `SKIP_CUSTOM_NODE_INSTALL=1` in the instance's `instance.env` for faster restarts.
+
+## Migrating from the bind-mounted layout
+
+Earlier versions bind-mounted a whole ComfyUI checkout from the host (`./ComfyUI`, `./ComfyUI-legacy`) and installed dependencies into named volumes at runtime. ComfyUI now lives in the image and only your data is mounted.
+
+Move the directories worth keeping out of your old checkout:
+
+```sh
+mkdir -p data/models data/default/{custom_nodes,input,output,user}
+
+mv ComfyUI/custom_nodes/*  data/default/custom_nodes/   2>/dev/null
+mv ComfyUI/input/*         data/default/input/          2>/dev/null
+mv ComfyUI/output/*        data/default/output/         2>/dev/null
+mv ComfyUI/user/*          data/default/user/           2>/dev/null
+```
+
+For models, either move them into `data/models/` or leave them where they are and point `MODELS_HOST_PATH` at the existing directory — no need to shuffle a few hundred gigabytes.
+
+Then drop the old named volumes and the old checkout once you're happy:
+
+```sh
+docker compose down -v          # removes the now-unused *-home-data / *-temp-data volumes
+```
 
 ## Adding a New Instance
 
@@ -111,7 +176,7 @@ To add a second (or third, etc.) ComfyUI instance with its own independent envir
 cp -r instances/default instances/my-new-instance
 ```
 
-### 2. Choose the CUDA / Python / PyTorch versions
+### 2. Choose the CUDA / Python / PyTorch / ComfyUI versions
 
 All instances build from the shared `.docker/Dockerfile`; the versions are controlled by the `build.args` on the instance's service in `docker-compose.yml` (set in step 4):
 
@@ -120,7 +185,10 @@ All instances build from the shared `.docker/Dockerfile`; the versions are contr
         CUDA_BASE_IMAGE: nvidia/cuda:12.6.0-cudnn-devel-ubuntu22.04   # CUDA version
         PYTHON_VERSION: 3.11.9                                        # Python version
         PYTORCH_INDEX_URL: https://download.pytorch.org/whl/cu126     # Match CUDA version
+        COMFYUI_REF: v0.3.40                                          # Tag, branch or SHA
 ```
+
+`COMFYUI_REF` is what makes instances genuinely independent — one can track `master` while another stays pinned to a release that your workflows are known to work on.
 
 If an instance needs deeper changes (different system packages, a different build flow entirely), copy `.docker/Dockerfile` into the instance directory and point the service's `build.dockerfile` at it — everything else keeps working the same way.
 
@@ -153,37 +221,31 @@ services:
         CUDA_BASE_IMAGE: nvidia/cuda:12.6.0-cudnn-devel-ubuntu22.04
         PYTHON_VERSION: 3.11.9
         PYTORCH_INDEX_URL: https://download.pytorch.org/whl/cu126
+        COMFYUI_REF: v0.3.40
     env_file:
       - ./instances/my-new-instance/instance.env
     volumes:
-      - ./ComfyUI-nightly:/ComfyUI
-      - my-new-instance-home-data:/home/${USERNAME}
-      - my-new-instance-temp-data:/temp-data
-      - ${MODELS_HOST_PATH:-./ComfyUI/models}:/ComfyUI/models
+      - ${MODELS_HOST_PATH:-./data/models}:/ComfyUI/models
+      - ./data/my-new-instance/custom_nodes:/ComfyUI/custom_nodes
+      - ./data/my-new-instance/input:/ComfyUI/input
+      - ./data/my-new-instance/output:/ComfyUI/output
+      - ./data/my-new-instance/user:/ComfyUI/user
     ports:
       - "8190:8188"
-
-volumes:
-  # ... existing volumes ...
-  my-new-instance-temp-data:
-  my-new-instance-home-data:
 ```
 
 `<<: *comfyui-base` supplies `user`, `working_dir`, the GPU reservation, `restart` and `networks`. It deliberately doesn't supply `build`, `volumes` or `ports` — YAML merge keys replace a key outright rather than deep-merging, so anything an instance customises has to be written out in full.
 
 **Important things to note:**
 - The **profile name** is how you start this instance: `docker compose --profile my-new-instance up -d`, or add it to `COMPOSE_PROFILES` in `.env`.
-- The volume names **must** be unique per instance (e.g., `my-new-instance-home-data`).
 - The **host port** must not collide with another instance's (8188 and 8189 are taken by `default` and `legacy`). The container side is always 8188.
-- The **app directory** must be its own checkout — two instances sharing one `/ComfyUI` bind mount would fight over `custom_nodes`.
+- The **data directories** must be this instance's own, so its custom nodes stay independent of the others'.
 - All instances share the same `MODELS_HOST_PATH` bind mount and `internal` network.
 
-### 5. Clone ComfyUI into the instance's app directory
-
-Match the path you used in the service's `/ComfyUI` bind mount:
+### 5. Create the instance's data directories
 
 ```sh
-git clone https://github.com/comfyanonymous/ComfyUI.git ComfyUI-nightly
+mkdir -p data/my-new-instance/{custom_nodes,input,output,user}
 ```
 
 ### 6. Build and start
@@ -222,13 +284,11 @@ The ngrok inspection UI is on http://localhost:4040.
 ### Slim down the image
 - can we throw away the CUDA development image and switch it for the runtime image once sage is built?
 
-### Specify the CUDA/Torch (i forget) Arch Env Var
-- I want to try this in docker to see if sageattention can be compiled at build time
-
 ### QoL/Misc.
 - bit more customisation over directories/custom directories:
 - ✅ configurable models/ path bind mount - point docker to an existing ComfyUI/models dir
 - ✅ multiple independent ComfyUI instances with decoupled dependencies
 - ✅ switch between instances / run them side-by-side via Compose profiles
+- ✅ SageAttention compiled at build time via `TORCH_CUDA_ARCH_LIST`
 - different "modes"
 - idk, open to suggestions - open an issue <3
