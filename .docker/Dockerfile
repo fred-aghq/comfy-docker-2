@@ -34,10 +34,9 @@ RUN export DEBIAN_FRONTEND=noninteractive &&\
     software-properties-common build-essential curl \
     libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev wget \
     llvm libncursesw5-dev xz-utils tk-dev libxml2-dev libxmlsec1-dev \
-    libffi-dev liblzma-dev git
-
-RUN export DEBIAN_FRONTEND=noninteractive &&\
-    apt update && apt install -y ffmpeg
+    libffi-dev liblzma-dev git \
+    ffmpeg && \
+    rm -rf /var/lib/apt/lists/*
 
 RUN git clone https://github.com/pyenv/pyenv.git /home/${USERNAME}/.pyenv && \
     export PYENV_ROOT="/home/${USERNAME}/.pyenv" && \
@@ -54,19 +53,8 @@ ENV COMFYUI_PATH=/ComfyUI
 RUN mkdir -p /temp-data && chown -R ${USERNAME} /temp-data
 RUN chown -R ${USERNAME} /home/${USERNAME}
 
-FROM cuda AS comfy-install
-
-# Switch to the new user
-USER ${USERNAME}
-
-FROM comfy-install AS final-steps
-
-ARG USER_ID=1000
-ARG GROUP_ID=1000
-ARG USERNAME=ubuntu
 ARG PYTORCH_INDEX_URL=https://download.pytorch.org/whl/cu130
 
-USER root
 COPY ./.docker/scripts/postinstall.sh /postinstall.sh
 COPY ./.docker/scripts/install-custom-nodes.sh /install-custom-nodes.sh
 RUN chmod +x /postinstall.sh && chown ${USER_ID}:${GROUP_ID} /postinstall.sh

@@ -23,7 +23,8 @@ comfy-docker-2/
 │   ├── scripts/
 │   │   ├── postinstall.sh                # Shared entrypoint script
 │   │   └── install-custom-nodes.sh       # Shared custom-node installer
-│   └── Dockerfile.comfyui-mini           # Optional ComfyUI Mini UI
+│   └── ngrok/
+│       └── policy.yaml                   # Optional ngrok traffic policy
 ├── docker-compose.yml                    # Service definitions (one per instance)
 ├── docker-compose.ngrok.yml              # Optional ngrok overlay
 ├── .env.dist                             # Global config template (UID, GID, models path)
@@ -192,13 +193,28 @@ docker compose --profile my-new-instance up -d
 docker compose up -d
 ```
 
+## Remote access via ngrok (optional)
+
+An ngrok overlay exposes one instance through a tunnel:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.ngrok.yml up -d
+```
+
+Set these in `.env`:
+
+```env
+NGROK_AUTHTOKEN=your-token-here
+NGROK_TARGET_URL=http://comfyui-default:8188   # which instance to tunnel
+```
+
+The target instance's profile has to be active, or there'll be nothing listening at the other end of the tunnel.
+
+> **ComfyUI has no authentication of its own** — anything you tunnel is open to whoever finds the URL. `.docker/ngrok/policy.yaml` adds HTTP basic auth as a minimum bar; change the credentials in it before you expose anything. See the [ngrok traffic policy docs](https://ngrok.com/docs/traffic-policy/) for more.
+
+The ngrok inspection UI is on http://localhost:4040.
+
 ## Future Enhancements
-### ngrok (WIP)
-I've added an ngrok container definition to suit my needs; at present, you'll need to comment out the traffic policy stuff in docker-compose.ngrok.yml, or add your own traffic policy yml file.
-
-`docker-compose -f docker-compose.yml -f docker-compose.ngrok.yml up -d`
-
-> Note: The ngrok overlay currently proxies `comfyui-default`. To tunnel a different instance, update the target URL in `docker-compose.ngrok.yml` — and make sure that instance's profile is active, or there'll be nothing listening at the other end of the tunnel.
 
 ### Slim down the image
 - can we throw away the CUDA development image and switch it for the runtime image once sage is built?
