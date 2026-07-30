@@ -1,9 +1,16 @@
+# Optional ngrok overlay — exposes one instance through an ngrok tunnel.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.ngrok.yml up -d
+#
+# Set NGROK_AUTHTOKEN in .env. NGROK_TARGET_URL selects which instance to
+# tunnel; it must name an instance whose profile is active, or there'll be
+# nothing listening at the other end.
 services:
     ngrok:
       image: ngrok/ngrok:latest
       command:
         - "http"
-        - "http://comfyui-default:8188"
+        - "${NGROK_TARGET_URL:-http://comfyui-default:8188}"
         - "--traffic-policy-file"
         - "/etc/policy.yaml"
         # - "--url"
@@ -15,4 +22,4 @@ services:
       networks:
         internal:
       volumes:
-        - ./.docker/ngrok/policy.yaml:/etc/policy.yaml
+        - ./.docker/ngrok/policy.yaml:/etc/policy.yaml:ro

@@ -1,0 +1,15 @@
+# ngrok traffic policy for the ComfyUI tunnel.
+#
+# ComfyUI has no authentication of its own, so anything you expose through a
+# tunnel is open to whoever finds the URL. This policy adds HTTP basic auth as
+# a minimum bar.
+#
+# Change the credentials below before using this, then restart the ngrok
+# container. See https://ngrok.com/docs/traffic-policy/ for the full syntax.
+on_http_request:
+  - actions:
+      - type: basic-auth
+        config:
+          credentials:
+            - "comfy:change-me"
+          realm: ComfyUI
