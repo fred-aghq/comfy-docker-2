@@ -188,6 +188,10 @@ jobs:
           # One architecture keeps the compile as short as possible. This is
           # checking that it compiles at all, not producing a shippable image.
           TORCH_CUDA_ARCH_LIST: "8.9"
+          # ninja defaults to one job per CPU regardless of memory, and enough
+          # concurrent nvcc processes OOM this runner. Uncapped locally, where
+          # you presumably have more than 7GB of RAM.
+          SAGEATTENTION_MAX_JOBS: "2"
         run: |
           cp .env.dist .env
           docker compose build comfyui-${{ matrix.instance }}

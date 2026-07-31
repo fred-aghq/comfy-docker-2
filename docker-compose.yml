@@ -5,6 +5,7 @@ x-common-build-args: &common-build-args
   GROUP_ID: ${GID}
   USERNAME: ${USERNAME}
   TORCH_CUDA_ARCH_LIST: ${TORCH_CUDA_ARCH_LIST:-}
+  SAGEATTENTION_MAX_JOBS: ${SAGEATTENTION_MAX_JOBS:-}
 
 # Runtime configuration shared by every instance. Merged into each service with
 # `<<: *comfyui-base`. Note that YAML merge keys replace whole keys rather than

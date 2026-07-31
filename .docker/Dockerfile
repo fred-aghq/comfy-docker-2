@@ -55,10 +55,16 @@ RUN uv pip install -r /ComfyUI/requirements.txt && \
 # entirely (and drop --use-sage-attention from that instance's switches).
 ARG TORCH_CUDA_ARCH_LIST
 ARG SAGEATTENTION_REF=v2.2.0
+# ninja parallelizes the CUDA kernel compile to the host's CPU count by
+# default, regardless of available memory — fine on a real build machine, but
+# enough concurrent nvcc processes will OOM a memory-constrained CI runner.
+# Leave unset to let ninja pick its own default.
+ARG SAGEATTENTION_MAX_JOBS
 RUN if [ -n "${TORCH_CUDA_ARCH_LIST}" ]; then \
         git clone https://github.com/thu-ml/SageAttention.git /tmp/sageattention && \
         git -C /tmp/sageattention checkout --detach ${SAGEATTENTION_REF} && \
         cd /tmp/sageattention && \
+        if [ -n "${SAGEATTENTION_MAX_JOBS}" ]; then export MAX_JOBS="${SAGEATTENTION_MAX_JOBS}"; fi && \
         TORCH_CUDA_ARCH_LIST="${TORCH_CUDA_ARCH_LIST}" uv pip install --no-build-isolation . && \
         rm -rf /tmp/sageattention; \
     else \
