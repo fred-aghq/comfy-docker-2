@@ -1,5 +1,7 @@
 # comfy-docker-2
 
+> Note: Original design was mine/written by "hand" but I have done a lot of (planned and supervised) refactoring using Claude. Feel free to call me out on AI slop.
+
 Run multiple ComfyUI instances in Docker — different CUDA, Python, PyTorch and ComfyUI versions side by side, sharing one models directory.
 
 **TL;DR:**
