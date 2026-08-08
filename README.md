@@ -38,8 +38,10 @@ Edit `.env`: set `UID`/`GID`/`USERNAME` (per the comments), and set `TORCH_CUDA_
 (Other cards, multiple architectures, or skipping SageAttention: see [GPU Architecture](https://github.com/fred-aghq/comfy-docker-2/wiki/GPU-Architecture).)
 
 ```sh
-# 2. Create the data directories (so they belong to you, not root)
-mkdir -p data/models data/default/{custom_nodes,input,output,user}
+# 2. Create the data directories (so they belong to you, not root — Docker
+#    creates missing bind-mount sources itself, as root, the first time an
+#    instance starts)
+mkdir -p data/models data/default/{custom_nodes,input,output,user} data/legacy/{custom_nodes,input,output,user}
 
 # 3. Build and start
 docker compose up -d --build
