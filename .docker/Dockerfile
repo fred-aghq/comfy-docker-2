@@ -46,7 +46,13 @@ RUN git clone https://github.com/comfyanonymous/ComfyUI.git /ComfyUI && \
 ARG PYTORCH_INDEX_URL=https://download.pytorch.org/whl/cu130
 RUN uv pip install torch torchvision torchaudio --extra-index-url ${PYTORCH_INDEX_URL}
 
+# manager_requirements.txt installs the comfyui_manager package that backs
+# ComfyUI's built-in --enable-manager flag. It's baked in unconditionally so
+# the flag works out of the box, but manager stays off unless an instance
+# opts in via COMFY_COMMANDLINE_SWITCHES — it lets the web UI install
+# arbitrary custom nodes, so it shouldn't be on by default.
 RUN uv pip install -r /ComfyUI/requirements.txt && \
+    uv pip install -r /ComfyUI/manager_requirements.txt && \
     uv pip install ninja
 
 # SageAttention, compiled here rather than on first boot. TORCH_CUDA_ARCH_LIST
