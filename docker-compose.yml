@@ -40,7 +40,7 @@ services:
         CUDA_RUNTIME_IMAGE: nvidia/cuda:13.0.3-cudnn-runtime-ubuntu24.04
         PYTHON_VERSION: 3.14.4
         PYTORCH_INDEX_URL: https://download.pytorch.org/whl/cu130
-        COMFYUI_REF: v0.29.0
+        COMFYUI_REF: v0.31.0
     env_file:
       - ./instances/default/instance.env
     volumes:
