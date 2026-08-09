@@ -19,6 +19,10 @@ x-comfyui-base: &comfyui-base
       reservations:
         devices:
           - capabilities: [gpu]
+  # Caps host RAM per instance so a runaway container gets OOM-killed by its
+  # own cgroup instead of the kernel picking victims across the whole host.
+  # See COMFYUI_MEM_LIMIT in .env.dist.
+  mem_limit: ${COMFYUI_MEM_LIMIT:-24g}
   restart: unless-stopped
   networks:
     internal:
