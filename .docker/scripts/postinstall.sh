@@ -25,6 +25,7 @@ fi
 # Custom nodes come from the host, so their dependencies can't be baked in.
 # uv makes this cheap when everything is already satisfied; set
 # SKIP_CUSTOM_NODE_INSTALL=1 for a faster start once you're settled.
+# Set UPDATE_CUSTOM_NODES=1 to also git pull every custom node first.
 if [ "${SKIP_CUSTOM_NODE_INSTALL:-0}" != "1" ]; then
     /install-custom-nodes.sh
 fi
