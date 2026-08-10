@@ -11,7 +11,7 @@ Run multiple ComfyUI instances in Docker — different CUDA, Python, PyTorch and
 - 📦 **One shared models directory** — no duplicating hundreds of GB per instance
 - ⚡ **SageAttention compiled at build time** — not on first boot
 - 🚀 **Containers start in seconds** — everything is baked into the image; rebuilds are cached and reproducible
-- 💾 **Only your data is mounted** — models, custom nodes, workflows and outputs live on the host; the environment lives in the image
+- 💾 **Your data is mounted, the environment persists too** — models, custom nodes, workflows and outputs live on the host; each instance's Python environment is a Docker volume seeded from the image, so custom nodes' dependencies survive restarts without re-downloading
 
 > I wanted to roll my own, mostly to try and build SageAttention. It grew a bit. You may still not find this useful <3
 
@@ -39,13 +39,15 @@ Edit `.env`: set `UID`/`GID`/`USERNAME` (per the comments), and set `TORCH_CUDA_
 
 ```sh
 # 2. Create the data directories (so they belong to you, not root)
-mkdir -p data/models data/default/{custom_nodes,input,output,user}
+mkdir -p data/models data/default/{custom_nodes,input,output,user,home}
 
 # 3. Build and start
 docker compose up -d --build
 ```
 
 ComfyUI is on [http://localhost:8188](http://localhost:8188). The first build compiles SageAttention so it takes a while — after that, builds are cached and containers start in seconds.
+
+Each instance's Python environment (`/opt/venv`) lives in a named Docker volume, seeded from the image on first start. That's what lets custom nodes' pip dependencies survive a `docker compose down` + `up` instead of reinstalling from scratch every time — but it also means a rebuilt image (new torch/SageAttention/ComfyUI version) won't automatically refresh an existing volume. Run `docker compose down -v` first when you want a genuinely clean environment.
 
 Already have a ComfyUI install full of models and custom nodes? See [Migrating](https://github.com/fred-aghq/comfy-docker-2/wiki/Migrating-From-the-Bind-Mounted-Layout).
 

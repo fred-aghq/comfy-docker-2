@@ -129,6 +129,10 @@ ENV UV_PYTHON_INSTALL_DIR=/opt/uv/python
 ENV VIRTUAL_ENV=/opt/venv
 ENV PATH="${VIRTUAL_ENV}/bin:/home/${USERNAME}/.local/bin:$PATH"
 ENV COMFYUI_PATH=/ComfyUI
+# Set explicitly rather than relying on the passwd-entry lookup, since compose
+# runs the container with a numeric `user: "${UID}:${GID}"` rather than the
+# USER directive's name — some tools (e.g. platformdirs) only check $HOME.
+ENV HOME=/home/${USERNAME}
 
 # The interpreter has to come along with the virtualenv that points at it.
 COPY --from=builder --chown=${USER_ID}:${GROUP_ID} /opt/uv /opt/uv
