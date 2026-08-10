@@ -48,9 +48,10 @@ RUN uv pip install torch torchvision torchaudio --extra-index-url ${PYTORCH_INDE
 
 # manager_requirements.txt installs the comfyui_manager package that backs
 # ComfyUI's built-in --enable-manager flag. It's baked in unconditionally so
-# the flag works out of the box, but manager stays off unless an instance
-# opts in via COMFY_COMMANDLINE_SWITCHES — it lets the web UI install
-# arbitrary custom nodes, so it shouldn't be on by default.
+# the flag works regardless of whether an instance turns it on; actually
+# enabling it is a per-instance choice made in COMFY_COMMANDLINE_SWITCHES
+# (see instance.env) — it lets the web UI install arbitrary custom nodes, so
+# think about whether you want that before flipping it on.
 RUN uv pip install -r /ComfyUI/requirements.txt && \
     uv pip install -r /ComfyUI/manager_requirements.txt && \
     uv pip install ninja
@@ -129,6 +130,10 @@ ENV UV_PYTHON_INSTALL_DIR=/opt/uv/python
 ENV VIRTUAL_ENV=/opt/venv
 ENV PATH="${VIRTUAL_ENV}/bin:/home/${USERNAME}/.local/bin:$PATH"
 ENV COMFYUI_PATH=/ComfyUI
+# Set explicitly rather than relying on the passwd-entry lookup, since compose
+# runs the container with a numeric `user: "${UID}:${GID}"` rather than the
+# USER directive's name — some tools (e.g. platformdirs) only check $HOME.
+ENV HOME=/home/${USERNAME}
 
 # The interpreter has to come along with the virtualenv that points at it.
 COPY --from=builder --chown=${USER_ID}:${GROUP_ID} /opt/uv /opt/uv

@@ -49,6 +49,8 @@ services:
       - ./data/default/input:/ComfyUI/input
       - ./data/default/output:/ComfyUI/output
       - ./data/default/user:/ComfyUI/user
+      - ./data/default/home:/home/${USERNAME}
+      - venv-default:/opt/venv
     ports:
       - "8188:8188"
   comfyui-legacy:
@@ -72,7 +74,18 @@ services:
       - ./data/legacy/input:/ComfyUI/input
       - ./data/legacy/output:/ComfyUI/output
       - ./data/legacy/user:/ComfyUI/user
+      - ./data/legacy/home:/home/${USERNAME}
+      - venv-legacy:/opt/venv
     ports:
       - "8189:8188"
 networks:
   internal:
+volumes:
+  # Seeded from the image's baked /opt/venv on first creation, then persists
+  # whatever install-custom-nodes.sh installs at runtime across container
+  # recreation (`docker compose down` + `up`). Rebuilding the image (new
+  # torch/SageAttention/ComfyUI version) does NOT refresh an existing volume —
+  # run `docker compose down -v` first to drop it and get a clean copy of the
+  # rebuilt image's venv.
+  venv-default:
+  venv-legacy:
