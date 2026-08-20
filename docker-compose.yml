@@ -36,11 +36,11 @@ services:
       dockerfile: ./.docker/Dockerfile
       args:
         <<: *common-build-args
-        CUDA_BASE_IMAGE: nvidia/cuda:13.0.3-cudnn-devel-ubuntu24.04
-        CUDA_RUNTIME_IMAGE: nvidia/cuda:13.0.3-cudnn-runtime-ubuntu24.04
+        CUDA_BASE_IMAGE: nvidia/cuda:13.3.1-cudnn-devel-ubuntu24.04
+        CUDA_RUNTIME_IMAGE: nvidia/cuda:13.3.1-cudnn-runtime-ubuntu24.04
         PYTHON_VERSION: 3.14.4
         PYTORCH_INDEX_URL: https://download.pytorch.org/whl/cu130
-        COMFYUI_REF: v0.31.0
+        COMFYUI_REF: v0.32.0
     env_file:
       - ./instances/default/instance.env
     networks:

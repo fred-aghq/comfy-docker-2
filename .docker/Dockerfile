@@ -134,6 +134,12 @@ ENV COMFYUI_PATH=/ComfyUI
 # runs the container with a numeric `user: "${UID}:${GID}"` rather than the
 # USER directive's name — some tools (e.g. platformdirs) only check $HOME.
 ENV HOME=/home/${USERNAME}
+# uv's default cache lives under $HOME, which compose bind-mounts to a host
+# directory while /opt/venv is a separate named volume — installing across
+# that filesystem boundary can't hardlink, so uv silently falls back to a
+# full copy every time. Keep the cache on the same volume as the venv it's
+# populating so hardlinking (and `docker compose down -v`'s reset) both work.
+ENV UV_CACHE_DIR=/opt/venv/.uv-cache
 
 # The interpreter has to come along with the virtualenv that points at it.
 COPY --from=builder --chown=${USER_ID}:${GROUP_ID} /opt/uv /opt/uv
