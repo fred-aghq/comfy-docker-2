@@ -43,6 +43,9 @@ services:
         COMFYUI_REF: v0.31.0
     env_file:
       - ./instances/default/instance.env
+    networks:
+      internal:
+      external_net:
     volumes:
       - ${MODELS_HOST_PATH:-./data/models}:/ComfyUI/models
       - ./data/default/custom_nodes:/ComfyUI/custom_nodes
@@ -80,6 +83,14 @@ services:
       - "8189:8188"
 networks:
   internal:
+  # Optional: joins comfyui-default to a network from another docker stack on
+  # the host. Off by default (an ordinary local bridge, isolated like
+  # `internal`); set EXTERNAL_NETWORK_ENABLED=true and EXTERNAL_NETWORK_NAME
+  # in .env to bind it to that stack's pre-existing network instead. See
+  # .env.dist.
+  external_net:
+    name: ${EXTERNAL_NETWORK_NAME:-comfyui-external}
+    external: ${EXTERNAL_NETWORK_ENABLED:-false}
 volumes:
   # Seeded from the image's baked /opt/venv on first creation, then persists
   # whatever install-custom-nodes.sh installs at runtime across container
