@@ -29,6 +29,19 @@ if [ "${SKIP_CUSTOM_NODE_INSTALL:-0}" != "1" ]; then
     /install-custom-nodes.sh
 fi
 
+# onnx / onnxruntime-gpu: not declared by any custom node's own requirements.txt,
+# but several depend on them anyway — comfyui_controlnet_aux's DWPose falls back
+# to a slow CPU path without onnxruntime's GPU providers, and WanVideoWrapper's
+# FantasyPortrait nodes (fantasyportrait/pd_fgc/face_utils.py) import both
+# directly without listing either as a dependency. Installed here rather than
+# in the Dockerfile because /opt/venv is a named volume that survives image
+# rebuilds — baking it into the image only helps on a fresh volume. It also
+# has to run after install-custom-nodes.sh above: comfyui-easy-use's
+# requirements.txt pulls in plain (CPU-only) onnxruntime, which installs its
+# files over onnxruntime-gpu's if it runs second. Reinstalling here every
+# start guarantees the GPU build's files are the ones left on disk.
+uv pip install onnx onnxruntime-gpu --reinstall-package onnxruntime-gpu
+
 # Asking for SageAttention when the image was built without it produces a
 # confusing traceback from deep inside ComfyUI, so say what's actually wrong.
 if [[ "${COMFY_COMMANDLINE_SWITCHES:-}" == *--use-sage-attention* ]] \

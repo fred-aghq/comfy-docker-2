@@ -31,6 +31,7 @@ services:
   comfyui-default:
     <<: *comfyui-base
     profiles: ["default"]
+    shm_size: '16gb'
     build:
       context: .
       dockerfile: ./.docker/Dockerfile
@@ -38,11 +39,18 @@ services:
         <<: *common-build-args
         CUDA_BASE_IMAGE: nvidia/cuda:13.3.1-cudnn-devel-ubuntu24.04
         CUDA_RUNTIME_IMAGE: nvidia/cuda:13.3.1-cudnn-runtime-ubuntu24.04
-        PYTHON_VERSION: 3.14.4
+        PYTHON_VERSION: 3.13.15
         PYTORCH_INDEX_URL: https://download.pytorch.org/whl/cu130
-        COMFYUI_REF: v0.32.0
+        COMFYUI_REF: v0.33.1
     env_file:
       - ./instances/default/instance.env
+    # Overrides x-comfyui-base's mem_limit: MiniMax H3 (~40GB of weights)
+    # needs more headroom than dynamic VRAM's host-side staging can predict,
+    # and the container getting cgroup-OOM-killed mid-generation was worse
+    # than an occasional host-level OOM. Uncapped, a runaway leak here can
+    # again make the kernel pick victims across the whole host — see the
+    # mem_limit comment on x-comfyui-base.
+    mem_limit: "0"
     networks:
       internal:
       external_net:

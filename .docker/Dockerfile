@@ -61,7 +61,7 @@ RUN uv pip install -r /ComfyUI/requirements.txt && \
 # architecture table in the README. Leave it empty to skip SageAttention
 # entirely (and drop --use-sage-attention from that instance's switches).
 ARG TORCH_CUDA_ARCH_LIST
-ARG SAGEATTENTION_REF=v2.2.0
+ARG SAGEATTENTION_REF=d1a57a546c
 # ninja parallelizes the CUDA kernel compile to the host's CPU count by
 # default, regardless of available memory — fine on a real build machine, but
 # enough concurrent nvcc processes will OOM a memory-constrained CI runner.
