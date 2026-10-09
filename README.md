@@ -63,6 +63,19 @@ COMPOSE_PROFILES=default,legacy             # in .env: run both side by side
 
 More in [Switching Between Instances](https://github.com/fred-aghq/comfy-docker-2/wiki/Switching-Between-Instances).
 
+## Routing ComfyUI through a VPN
+
+An optional overlay runs [gluetun](https://github.com/qdm12/gluetun) connected to Proton VPN, and points `comfyui-default`'s outbound HTTP(S) at its proxy — handy for custom nodes like lora-manager reaching CivitAI without a VPN on the host. Set `PROTONVPN_WIREGUARD_PRIVATE_KEY` (and optionally `VPN_SERVER_COUNTRIES`) in `.env`, then:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.vpn.yml up -d
+# check ComfyUI's outbound IP is Proton's, not yours
+docker compose -f docker-compose.yml -f docker-compose.vpn.yml exec comfyui-default \
+  python -c "import urllib.request; print(urllib.request.urlopen('https://ipinfo.io/ip').read().decode())"
+```
+
+Add `COMPOSE_FILE=docker-compose.yml:docker-compose.vpn.yml` to `.env` to make it the default. Only proxy-aware clients use the VPN (most Python HTTP libraries, pip, git) — see the comments in `docker-compose.vpn.yml`.
+
 ## Documentation
 
 The in-depth docs live in the [wiki](https://github.com/fred-aghq/comfy-docker-2/wiki):

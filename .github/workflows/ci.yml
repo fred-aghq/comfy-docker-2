@@ -53,6 +53,7 @@ jobs:
           cp .env.dist .env
           docker compose config --quiet
           docker compose -f docker-compose.yml -f docker-compose.ngrok.yml config --quiet
+          docker compose -f docker-compose.yml -f docker-compose.vpn.yml config --quiet
 
       - name: Check each instance's profile selects exactly its own service
         run: |
