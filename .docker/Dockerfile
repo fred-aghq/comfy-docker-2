@@ -10,7 +10,8 @@ FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
 
 # ─── builder ─────────────────────────────────────────────────────────────────
 # Everything that needs a compiler happens here, on the CUDA devel image: the
-# virtualenv, torch, ComfyUI's dependencies, and the SageAttention extension.
+# virtualenv, torch and ComfyUI's dependencies. Attention comes from
+# comfy-kitchen, which ComfyUI's requirements install as a prebuilt wheel.
 # None of the build toolchain survives into the final image.
 FROM ${CUDA_BASE_IMAGE} AS builder
 
@@ -31,7 +32,7 @@ ENV PATH="${VIRTUAL_ENV}/bin:$PATH"
 
 # --seed puts a real pip in the venv, so anything expecting `pip` still works.
 # setuptools is explicit because Python 3.12+ venvs no longer seed it, and
-# SageAttention's build needs it.
+# custom nodes that build native extensions at startup can need it.
 RUN uv python install ${PYTHON_VERSION} && \
     uv venv --python ${PYTHON_VERSION} --seed ${VIRTUAL_ENV} && \
     uv pip install setuptools wheel
@@ -52,31 +53,10 @@ RUN uv pip install torch torchvision torchaudio --extra-index-url ${PYTORCH_INDE
 # enabling it is a per-instance choice made in COMFY_COMMANDLINE_SWITCHES
 # (see instance.env) — it lets the web UI install arbitrary custom nodes, so
 # think about whether you want that before flipping it on.
+# ninja speeds up custom nodes that JIT-compile extensions at runtime.
 RUN uv pip install -r /ComfyUI/requirements.txt && \
     uv pip install -r /ComfyUI/manager_requirements.txt && \
     uv pip install ninja
-
-# SageAttention, compiled here rather than on first boot. TORCH_CUDA_ARCH_LIST
-# is required because there's no GPU to detect during a build — see the GPU
-# architecture table in the README. Leave it empty to skip SageAttention
-# entirely (and drop --use-sage-attention from that instance's switches).
-ARG TORCH_CUDA_ARCH_LIST
-ARG SAGEATTENTION_REF=d1a57a546c
-# ninja parallelizes the CUDA kernel compile to the host's CPU count by
-# default, regardless of available memory — fine on a real build machine, but
-# enough concurrent nvcc processes will OOM a memory-constrained CI runner.
-# Leave unset to let ninja pick its own default.
-ARG SAGEATTENTION_MAX_JOBS
-RUN if [ -n "${TORCH_CUDA_ARCH_LIST}" ]; then \
-        git clone https://github.com/thu-ml/SageAttention.git /tmp/sageattention && \
-        git -C /tmp/sageattention checkout --detach ${SAGEATTENTION_REF} && \
-        cd /tmp/sageattention && \
-        if [ -n "${SAGEATTENTION_MAX_JOBS}" ]; then export MAX_JOBS="${SAGEATTENTION_MAX_JOBS}"; fi && \
-        TORCH_CUDA_ARCH_LIST="${TORCH_CUDA_ARCH_LIST}" uv pip install --no-build-isolation . && \
-        rm -rf /tmp/sageattention; \
-    else \
-        echo "TORCH_CUDA_ARCH_LIST is empty — skipping SageAttention build."; \
-    fi
 
 # The mutable ComfyUI directories get bind-mounted over at runtime, which hides
 # whatever shipped in them. Keep a pristine copy so the entrypoint can restore
