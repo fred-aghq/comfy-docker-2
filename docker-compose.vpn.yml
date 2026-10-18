@@ -1,0 +1,48 @@
+# Optional VPN overlay — routes comfyui-default's outbound HTTP(S) through a
+# Proton VPN tunnel run by gluetun, so custom nodes (e.g. lora-manager talking
+# to CivitAI) get out via the VPN without the host needing one connected.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.vpn.yml up -d
+#
+# Or make it permanent with COMPOSE_FILE=docker-compose.yml:docker-compose.vpn.yml
+# in .env. Set PROTONVPN_WIREGUARD_PRIVATE_KEY in .env (see .env.dist).
+#
+# This is gluetun's HTTP proxy, not a full tunnel: ComfyUI's ports and
+# networks are unchanged, and anything in the container that honours
+# HTTP(S)_PROXY goes through the VPN — lora-manager, but also pip/uv, git over
+# HTTPS and huggingface_hub. Clients that ignore the proxy variables connect
+# directly; there's no kill-switch. lora-manager's own proxy setting must stay
+# off, otherwise it stops reading these variables.
+services:
+  gluetun:
+    image: qmcgaw/gluetun:v3.41.3
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      VPN_SERVICE_PROVIDER: protonvpn
+      VPN_TYPE: wireguard
+      WIREGUARD_PRIVATE_KEY: ${PROTONVPN_WIREGUARD_PRIVATE_KEY:-}
+      SERVER_COUNTRIES: ${VPN_SERVER_COUNTRIES:-}
+      FREE_ONLY: ${PROTONVPN_FREE_ONLY:-off}
+      HTTPPROXY: "on"
+      HTTPPROXY_LISTENING_ADDRESS: ":8888"
+    # Not published to the host — only reachable from the internal network.
+    networks:
+      internal:
+    restart: unless-stopped
+
+  comfyui-default:
+    environment:
+      HTTP_PROXY: http://gluetun:8888
+      HTTPS_PROXY: http://gluetun:8888
+      http_proxy: http://gluetun:8888
+      https_proxy: http://gluetun:8888
+      NO_PROXY: localhost,127.0.0.1,::1,gluetun
+      no_proxy: localhost,127.0.0.1,::1,gluetun
+    # gluetun's image ships a HEALTHCHECK that only passes once the tunnel is
+    # up, so ComfyUI (and its startup pip installs) don't race it.
+    depends_on:
+      gluetun:
+        condition: service_healthy

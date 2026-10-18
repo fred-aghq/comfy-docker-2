@@ -46,7 +46,14 @@ RUN git clone https://github.com/comfyanonymous/ComfyUI.git /ComfyUI && \
 ARG PYTORCH_INDEX_URL=https://download.pytorch.org/whl/cu130
 RUN uv pip install torch torchvision torchaudio --extra-index-url ${PYTORCH_INDEX_URL}
 
+# manager_requirements.txt installs the comfyui_manager package that backs
+# ComfyUI's built-in --enable-manager flag. It's baked in unconditionally so
+# the flag works regardless of whether an instance turns it on; actually
+# enabling it is a per-instance choice made in COMFY_COMMANDLINE_SWITCHES
+# (see instance.env) — it lets the web UI install arbitrary custom nodes, so
+# think about whether you want that before flipping it on.
 RUN uv pip install -r /ComfyUI/requirements.txt && \
+    uv pip install -r /ComfyUI/manager_requirements.txt && \
     uv pip install ninja
 
 # SageAttention, compiled here rather than on first boot. TORCH_CUDA_ARCH_LIST
@@ -54,11 +61,17 @@ RUN uv pip install -r /ComfyUI/requirements.txt && \
 # architecture table in the README. Leave it empty to skip SageAttention
 # entirely (and drop --use-sage-attention from that instance's switches).
 ARG TORCH_CUDA_ARCH_LIST
-ARG SAGEATTENTION_REF=v2.2.0
+ARG SAGEATTENTION_REF=d1a57a546c
+# ninja parallelizes the CUDA kernel compile to the host's CPU count by
+# default, regardless of available memory — fine on a real build machine, but
+# enough concurrent nvcc processes will OOM a memory-constrained CI runner.
+# Leave unset to let ninja pick its own default.
+ARG SAGEATTENTION_MAX_JOBS
 RUN if [ -n "${TORCH_CUDA_ARCH_LIST}" ]; then \
         git clone https://github.com/thu-ml/SageAttention.git /tmp/sageattention && \
         git -C /tmp/sageattention checkout --detach ${SAGEATTENTION_REF} && \
         cd /tmp/sageattention && \
+        if [ -n "${SAGEATTENTION_MAX_JOBS}" ]; then export MAX_JOBS="${SAGEATTENTION_MAX_JOBS}"; fi && \
         TORCH_CUDA_ARCH_LIST="${TORCH_CUDA_ARCH_LIST}" uv pip install --no-build-isolation . && \
         rm -rf /tmp/sageattention; \
     else \
@@ -117,6 +130,16 @@ ENV UV_PYTHON_INSTALL_DIR=/opt/uv/python
 ENV VIRTUAL_ENV=/opt/venv
 ENV PATH="${VIRTUAL_ENV}/bin:/home/${USERNAME}/.local/bin:$PATH"
 ENV COMFYUI_PATH=/ComfyUI
+# Set explicitly rather than relying on the passwd-entry lookup, since compose
+# runs the container with a numeric `user: "${UID}:${GID}"` rather than the
+# USER directive's name — some tools (e.g. platformdirs) only check $HOME.
+ENV HOME=/home/${USERNAME}
+# uv's default cache lives under $HOME, which compose bind-mounts to a host
+# directory while /opt/venv is a separate named volume — installing across
+# that filesystem boundary can't hardlink, so uv silently falls back to a
+# full copy every time. Keep the cache on the same volume as the venv it's
+# populating so hardlinking (and `docker compose down -v`'s reset) both work.
+ENV UV_CACHE_DIR=/opt/venv/.uv-cache
 
 # The interpreter has to come along with the virtualenv that points at it.
 COPY --from=builder --chown=${USER_ID}:${GROUP_ID} /opt/uv /opt/uv
