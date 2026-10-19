@@ -39,7 +39,7 @@ services:
         CUDA_RUNTIME_IMAGE: nvidia/cuda:13.3.1-cudnn-runtime-ubuntu24.04
         PYTHON_VERSION: 3.13.15
         PYTORCH_INDEX_URL: https://download.pytorch.org/whl/cu130
-        COMFYUI_REF: v0.33.1
+        COMFYUI_REF: c06bf5f569d268b80076e5f44126f87cdf835869
     env_file:
       - ./instances/default/instance.env
     # Overrides x-comfyui-base's mem_limit: MiniMax H3 (~40GB of weights)
@@ -74,7 +74,6 @@ services:
         CUDA_RUNTIME_IMAGE: nvidia/cuda:12.8.1-cudnn-runtime-ubuntu22.04
         PYTHON_VERSION: 3.12.3
         PYTORCH_INDEX_URL: https://download.pytorch.org/whl/cu128
-        # --use-ck-attention (comfy-kitchen) needs ComfyUI v0.32.0 or later.
         COMFYUI_REF: v0.33.1
     env_file:
       - ./instances/legacy/instance.env
