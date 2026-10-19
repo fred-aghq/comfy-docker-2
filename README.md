@@ -9,11 +9,11 @@ Run multiple ComfyUI instances in Docker — different CUDA, Python, PyTorch and
 - 🖥️ **Multiple instances** — each with its own CUDA / Python / PyTorch / ComfyUI version, fully isolated
 - 🔀 **Switch with one env var**, or run several at once on different ports
 - 📦 **One shared models directory** — no duplicating hundreds of GB per instance
-- ⚡ **SageAttention compiled at build time** — not on first boot
+- ⚡ **comfy-kitchen attention** — ships with ComfyUI, nothing to compile
 - 🚀 **Containers start in seconds** — everything is baked into the image; rebuilds are cached and reproducible
 - 💾 **Your data is mounted, the environment persists too** — models, custom nodes, workflows and outputs live on the host; each instance's Python environment is a Docker volume seeded from the image, so custom nodes' dependencies survive restarts without re-downloading
 
-> I wanted to roll my own, mostly to try and build SageAttention. It grew a bit. You may still not find this useful <3
+> I wanted to roll my own, originally to try and build SageAttention (since replaced by ComfyUI's own comfy-kitchen). It grew a bit. You may still not find this useful <3
 
 ## Requirements
 
@@ -27,15 +27,7 @@ Run multiple ComfyUI instances in Docker — different CUDA, Python, PyTorch and
 cp .env.dist .env
 ```
 
-Edit `.env`: set `UID`/`GID`/`USERNAME` (per the comments), and set `TORCH_CUDA_ARCH_LIST` for your GPU:
-
-| GPU | `TORCH_CUDA_ARCH_LIST` |
-|---|---|
-| RTX 30xx | `8.6` |
-| RTX 40xx | `8.9` |
-| RTX 50xx | `12.0` |
-
-(Other cards, multiple architectures, or skipping SageAttention: see [GPU Architecture](https://github.com/fred-aghq/comfy-docker-2/wiki/GPU-Architecture).)
+Edit `.env`: set `UID`/`GID`/`USERNAME` (per the comments).
 
 ```sh
 # 2. Create the data directories (so they belong to you, not root — Docker
@@ -47,9 +39,9 @@ mkdir -p data/models data/default/{custom_nodes,input,output,user} data/legacy/{
 docker compose up -d --build
 ```
 
-ComfyUI is on [http://localhost:8188](http://localhost:8188). The first build compiles SageAttention so it takes a while — after that, builds are cached and containers start in seconds.
+ComfyUI is on [http://localhost:8188](http://localhost:8188). The first build downloads torch and ComfyUI's dependencies so it takes a while — after that, builds are cached and containers start in seconds.
 
-Each instance's Python environment (`/opt/venv`) lives in a named Docker volume, seeded from the image on first start. That's what lets custom nodes' pip dependencies survive a `docker compose down` + `up` instead of reinstalling from scratch every time — but it also means a rebuilt image (new torch/SageAttention/ComfyUI version) won't automatically refresh an existing volume. Run `docker compose down -v` first when you want a genuinely clean environment.
+Each instance's Python environment (`/opt/venv`) lives in a named Docker volume, seeded from the image on first start. That's what lets custom nodes' pip dependencies survive a `docker compose down` + `up` instead of reinstalling from scratch every time — but it also means a rebuilt image (new torch/ComfyUI version) won't automatically refresh an existing volume. Run `docker compose down -v` first when you want a genuinely clean environment.
 
 Already have a ComfyUI install full of models and custom nodes? See [Migrating](https://github.com/fred-aghq/comfy-docker-2/wiki/Migrating-From-the-Bind-Mounted-Layout).
 
@@ -83,7 +75,6 @@ Add `COMPOSE_FILE=docker-compose.yml:docker-compose.vpn.yml` to `.env` to make i
 The in-depth docs live in the [wiki](https://github.com/fred-aghq/comfy-docker-2/wiki):
 
 - [Architecture](https://github.com/fred-aghq/comfy-docker-2/wiki/Architecture) — repo layout and the ideas behind it
-- [GPU Architecture](https://github.com/fred-aghq/comfy-docker-2/wiki/GPU-Architecture) — `TORCH_CUDA_ARCH_LIST` in full
 - [Switching Between Instances](https://github.com/fred-aghq/comfy-docker-2/wiki/Switching-Between-Instances) — profiles, side-by-side, VRAM notes
 - [Adding a New Instance](https://github.com/fred-aghq/comfy-docker-2/wiki/Adding-a-New-Instance) — your own CUDA/Python/PyTorch/ComfyUI combo
 - [Upgrading and Pinning](https://github.com/fred-aghq/comfy-docker-2/wiki/Upgrading-and-Pinning) — version pins, rebuilds, why not `master`
@@ -96,7 +87,7 @@ The in-depth docs live in the [wiki](https://github.com/fred-aghq/comfy-docker-2
 - ✅ configurable models/ path — point at an existing models dir
 - ✅ multiple independent instances with decoupled dependencies
 - ✅ switch between instances / run side-by-side via Compose profiles
-- ✅ SageAttention compiled at build time
+- ✅ ~~SageAttention compiled at build time~~ → comfy-kitchen attention, nothing to compile
 - ✅ ship the CUDA runtime image instead of the devel image
 - different "modes"
 - more customisation over directories

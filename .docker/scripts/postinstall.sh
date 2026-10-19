@@ -42,19 +42,6 @@ fi
 # start guarantees the GPU build's files are the ones left on disk.
 uv pip install onnx onnxruntime-gpu --reinstall-package onnxruntime-gpu
 
-# Asking for SageAttention when the image was built without it produces a
-# confusing traceback from deep inside ComfyUI, so say what's actually wrong.
-if [[ "${COMFY_COMMANDLINE_SWITCHES:-}" == *--use-sage-attention* ]] \
-   && ! python -c "import sageattention" 2>/dev/null; then
-    echo "ERROR: --use-sage-attention is set, but SageAttention isn't installed." >&2
-    echo "       This image was built without it, which happens when" >&2
-    echo "       TORCH_CUDA_ARCH_LIST is empty. Set it in .env for your GPU (see" >&2
-    echo "       the GPU architecture table in the README) and rebuild:" >&2
-    echo "         docker compose up -d --build" >&2
-    echo "       Or remove --use-sage-attention from this instance's instance.env." >&2
-    exit 1
-fi
-
 cd /ComfyUI || exit 1
 
 # Deliberately unquoted: COMFY_COMMANDLINE_SWITCHES holds several

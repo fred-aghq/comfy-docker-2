@@ -5,10 +5,6 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
-  # Uncomment to also run the full SageAttention build weekly, catching
-  # upstream drift without anyone having to remember to trigger it.
-  # schedule:
-  #   - cron: "0 4 * * 1"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -105,11 +101,11 @@ jobs:
           failure-threshold: error
           ignore: DL3008,DL3013,DL3003
 
-  # Builds each instance without the SageAttention compile, which is the slow
-  # part. Still exercises the base images, apt, uv, the pinned ComfyUI clone,
-  # torch, ComfyUI's requirements and the multi-stage copy.
+  # Builds each instance: the base images, apt, uv, the pinned ComfyUI clone,
+  # torch, ComfyUI's requirements (comfy-kitchen included) and the
+  # multi-stage copy.
   build:
-    name: Build ${{ matrix.instance }} (no SageAttention)
+    name: Build ${{ matrix.instance }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     strategy:
@@ -127,10 +123,6 @@ jobs:
           large-packages: false   # slow, and freeing the tool cache is usually enough
 
       - name: Build
-        env:
-          # Empty makes the Dockerfile skip the SageAttention build. Everything
-          # else still runs.
-          TORCH_CUDA_ARCH_LIST: ""
         run: |
           cp .env.dist .env
           docker compose build comfyui-${{ matrix.instance }}
@@ -169,61 +161,9 @@ jobs:
           # --help exits at argument parsing, so no GPU and no server start.
           docker run --rm --entrypoint bash "$IMAGE" -c 'cd /ComfyUI && python main.py --help > /dev/null'
 
-          # The entrypoint explains itself when SageAttention was skipped,
-          # rather than failing somewhere inside ComfyUI.
-          if docker run --rm \
-               -e SKIP_CUSTOM_NODE_INSTALL=1 \
-               -e COMFY_COMMANDLINE_SWITCHES=--use-sage-attention \
-               "$IMAGE" 2>&1 | grep -q "SageAttention isn't installed"; then
-            echo "entrypoint guard fired as expected"
-          else
-            echo "::error::entrypoint should have refused --use-sage-attention"
-            exit 1
-          fi
-
-  # The full build including the SageAttention compile: slow and disk-hungry,
-  # so it's manual (or scheduled, if you uncomment the trigger above). Worth
-  # running before merging anything that touches the build.
-  build-full:
-    name: Build ${{ matrix.instance }} with SageAttention
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
-    runs-on: ubuntu-latest
-    timeout-minutes: 240
-    strategy:
-      fail-fast: false
-      matrix:
-        instance: [default, legacy]
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Free disk space
-        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1
-        with:
-          tool-cache: true
-          large-packages: true
-          docker-images: true
-
-      - name: Build with SageAttention
-        env:
-          # One architecture keeps the compile as short as possible. This is
-          # checking that it compiles at all, not producing a shippable image.
-          TORCH_CUDA_ARCH_LIST: "8.9"
-          # ninja defaults to one job per CPU regardless of memory, and enough
-          # concurrent nvcc processes OOM this runner. Uncapped locally, where
-          # you presumably have more than 7GB of RAM.
-          SAGEATTENTION_MAX_JOBS: "2"
-        run: |
-          cp .env.dist .env
-          docker compose build comfyui-${{ matrix.instance }}
-
-      - name: Verify SageAttention is importable
-        run: |
-          IMAGE=$(docker images --format '{{.Repository}}:{{.Tag}}' \
-                  | grep -E "^comfyci[-_]comfyui-${{ matrix.instance }}:" | head -1)
-          if [ -z "$IMAGE" ]; then
-            echo "::error::couldn't find the built image"
-            docker images
-            exit 1
-          fi
+          # comfy-kitchen, the attention backend every instance uses, is
+          # installed, and this instance's ComfyUI ref knows the flag for it
+          # (it arrived in v0.32.0).
+          docker run --rm --entrypoint bash "$IMAGE" -c 'python -c "import comfy_kitchen"'
           docker run --rm --entrypoint bash "$IMAGE" \
-            -c 'python -c "import sageattention; print(\"sageattention OK\")"'
+            -c 'cd /ComfyUI && python main.py --use-ck-attention --help > /dev/null'

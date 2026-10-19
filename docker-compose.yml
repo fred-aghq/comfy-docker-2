@@ -4,8 +4,6 @@ x-common-build-args: &common-build-args
   USER_ID: ${UID}
   GROUP_ID: ${GID}
   USERNAME: ${USERNAME}
-  TORCH_CUDA_ARCH_LIST: ${TORCH_CUDA_ARCH_LIST:-}
-  SAGEATTENTION_MAX_JOBS: ${SAGEATTENTION_MAX_JOBS:-}
 
 # Runtime configuration shared by every instance. Merged into each service with
 # `<<: *comfyui-base`. Note that YAML merge keys replace whole keys rather than
@@ -76,7 +74,8 @@ services:
         CUDA_RUNTIME_IMAGE: nvidia/cuda:12.8.1-cudnn-runtime-ubuntu22.04
         PYTHON_VERSION: 3.12.3
         PYTORCH_INDEX_URL: https://download.pytorch.org/whl/cu128
-        COMFYUI_REF: v0.19.2
+        # --use-ck-attention (comfy-kitchen) needs ComfyUI v0.32.0 or later.
+        COMFYUI_REF: v0.33.1
     env_file:
       - ./instances/legacy/instance.env
     volumes:
@@ -103,7 +102,7 @@ volumes:
   # Seeded from the image's baked /opt/venv on first creation, then persists
   # whatever install-custom-nodes.sh installs at runtime across container
   # recreation (`docker compose down` + `up`). Rebuilding the image (new
-  # torch/SageAttention/ComfyUI version) does NOT refresh an existing volume —
+  # torch/ComfyUI version) does NOT refresh an existing volume —
   # run `docker compose down -v` first to drop it and get a clean copy of the
   # rebuilt image's venv.
   venv-default:
